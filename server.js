@@ -4,7 +4,7 @@ const mysql = require('mysql2/promise');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const fs = require('fs');          // ⬅️ AGREGADO para leer archivos SQL
+const fs = require('fs');          // ⬅️ para leer archivos SQL
 require('dotenv').config();
 
 const app = express();
@@ -20,18 +20,21 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname)));
 
-// Pool de base de datos
+// --------------------------------------------------------------
+// 🔧 POOL DE CONEXIÓN – usa las variables que Railway inyecta AUTOMÁTICAMENTE
+// --------------------------------------------------------------
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'podologia_db',
+  host: process.env.MYSQLHOST,          // inyectado por Railway
+  user: process.env.MYSQLUSER,          // inyectado por Railway
+  password: process.env.MYSQLPASSWORD,  // inyectado por Railway
+  database: process.env.MYSQL_DATABASE, // inyectado por Railway (normalmente 'railway')
+  port: parseInt(process.env.MYSQLPORT) || 3306,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
 });
 
-// ✅ Prueba de conexión a MySQL al iniciar (evita que el servidor muera silenciosamente)
+// ✅ Prueba de conexión a MySQL al iniciar (muestra en logs si todo va bien)
 (async () => {
   try {
     const conn = await pool.getConnection();
@@ -482,5 +485,5 @@ app.listen(PORT, () => {
   console.log(`🦶 PodoClinic corriendo en http://localhost:${PORT}`);
   console.log(`👩‍⚕️  Panel médico:     http://localhost:${PORT}/`);
   console.log(`🙋  Portal pacientes: http://localhost:${PORT}/pacientes`);
-  console.log(`📊  Base de datos:    ${process.env.DB_NAME || 'podologia_db'}`);
+  console.log(`📊  Base de datos:    ${process.env.MYSQL_DATABASE || 'railway'}`);
 });
