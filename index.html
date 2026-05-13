@@ -436,7 +436,7 @@
           <div class="stat-icon" style="background:rgba(79,195,161,0.12);">👤</div>
           <div class="stat-num" id="stat-pacientes">0</div>
           <div class="stat-label">Total Pacientes</div>
-          <div class="stat-delta up" id="stat-delta-pacientes">Pacientes registrados</div>
+          <div class="stat-delta up" id="stat-delta-pacientes">Pacientes activos</div>
         </div>
         <div class="stat-card">
           <div class="stat-icon" style="background:rgba(240,165,0,0.12);">📋</div>
@@ -637,7 +637,9 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const API_URL = 'http://localhost:3001/api';
+  // 🔧 CORRECCIÓN 1: API_URL vacía para usar rutas relativas (funciona en Railway)
+  const API_URL = '';
+  
   let authToken = localStorage.getItem('authToken');
   let currentUser = localStorage.getItem('currentUser') ? JSON.parse(localStorage.getItem('currentUser')) : null;
   let pacientes = [];
@@ -768,11 +770,18 @@
     }
   }
 
+  // 🔧 CORRECCIÓN 2: mostrarApp sin redirección a página inexistente
   function mostrarApp() {
-    // Guardar sesión y redirigir a la app principal
+    // Guardar sesión (ya está guardada)
     localStorage.setItem('authToken', authToken);
     localStorage.setItem('currentUser', JSON.stringify(currentUser));
-    window.location.href = 'podologia_app.html';
+    // Ocultar el formulario de login y mostrar la aplicación
+    document.getElementById('login-page').classList.add('hidden');
+    document.getElementById('app-page').style.display = 'flex';
+    // Inicializar los datos de la aplicación
+    if (typeof initApp === 'function') {
+      initApp();
+    }
   }
 
   function handleLogout() {
@@ -782,6 +791,7 @@
       authToken = null;
       currentUser = null;
       pacientes = [];
+      // Recargar la página para resetear el estado y mostrar el login
       location.reload();
     }
   }
