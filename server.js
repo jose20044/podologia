@@ -31,6 +31,29 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+// ✅ Prueba de conexión a MySQL al iniciar (evita que el servidor muera silenciosamente)
+(async () => {
+  try {
+    const conn = await pool.getConnection();
+    console.log('✅ Conectado a MySQL exitosamente');
+    conn.release();
+  } catch (err) {
+    console.error('❌ Error conectando a MySQL:', err.message);
+    // No detenemos el servidor, solo mostramos el error
+  }
+})();
+
+// ✅ Middleware global para capturar errores inesperados
+app.use((err, req, res, next) => {
+  console.error('Error global:', err);
+  res.status(500).json({ error: 'Error interno del servidor' });
+});
+
+// ✅ Endpoint de health check para Railway
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // ──────────────────────────────────────────
 // MIDDLEWARE DE AUTENTICACIÓN
 // ──────────────────────────────────────────
@@ -149,11 +172,8 @@ app.post('/api/pacientes', verifyToken, async (req, res) => {
     const { nombre, rut, edad, email, telefono, direccion, alergias, diagnostico, estado } = req.body;
     if (!nombre || !rut) return res.status(400).json({ error: 'Nombre y RUT son requeridos' });
 
-    // Para pacientes, el user_id owner es el médico asignado o 1 (default)
-    // Para doctors, el user_id es el propio doctor
     let ownerId = req.userId;
     if (req.userRole === 'patient') {
-      // Asignar al primer doctor disponible o usar id propio como fallback
       const conn2 = await pool.getConnection();
       const [doctors] = await conn2.execute("SELECT id FROM users WHERE role = 'doctor' LIMIT 1");
       conn2.release();
@@ -161,8 +181,6 @@ app.post('/api/pacientes', verifyToken, async (req, res) => {
     }
 
     const conn = await pool.getConnection();
-
-    // Verificar si el RUT ya existe para este owner
     const [existing] = await conn.execute(
       'SELECT id FROM pacientes WHERE rut = ? AND user_id = ?',
       [rut, ownerId]
@@ -258,7 +276,6 @@ app.post('/api/historial', verifyToken, async (req, res) => {
 // RUTAS DE CITAS
 // ──────────────────────────────────────────
 
-// GET citas — doctor ve las suyas, paciente ve las propias
 app.get('/api/citas', verifyToken, async (req, res) => {
   try {
     const { fecha } = req.query;
@@ -273,7 +290,6 @@ app.get('/api/citas', verifyToken, async (req, res) => {
       query += 'c.user_id = ?';
       params.push(req.userId);
     } else {
-      // Paciente: ver citas donde su email o user_id coincide
       query += 'p.email = (SELECT email FROM users WHERE id = ?)';
       params.push(req.userId);
     }
@@ -289,13 +305,11 @@ app.get('/api/citas', verifyToken, async (req, res) => {
   }
 });
 
-// POST cita — cualquier usuario autenticado puede agendar
 app.post('/api/citas', verifyToken, async (req, res) => {
   try {
     const { paciente_id, fecha, hora, duracion, tratamiento, notas, estado } = req.body;
     if (!paciente_id || !fecha || !hora) return res.status(400).json({ error: 'Paciente, fecha y hora son requeridos' });
 
-    // Verificar que el horario no esté tomado
     const conn = await pool.getConnection();
     const [existing] = await conn.execute(
       "SELECT id FROM citas WHERE fecha = ? AND hora = ? AND estado != 'Cancelada'",
@@ -306,7 +320,6 @@ app.post('/api/citas', verifyToken, async (req, res) => {
       return res.status(409).json({ error: 'Ese horario ya está ocupado. Elige otro.' });
     }
 
-    // Owner: si es paciente, asignar al primer doctor disponible
     let ownerId = req.userId;
     if (req.userRole === 'patient') {
       const [doctors] = await conn.execute("SELECT id FROM users WHERE role = 'doctor' LIMIT 1");
@@ -325,7 +338,6 @@ app.post('/api/citas', verifyToken, async (req, res) => {
   }
 });
 
-// PUT cita (actualizar estado, etc.)
 app.put('/api/citas/:id', verifyToken, async (req, res) => {
   try {
     const { estado, hora, duracion, tratamiento, notas, fecha } = req.body;
@@ -343,7 +355,6 @@ app.put('/api/citas/:id', verifyToken, async (req, res) => {
 
     values.push(req.params.id);
 
-    // Paciente solo puede cancelar sus propias citas
     if (req.userRole === 'patient') {
       values.push(req.userId);
       await conn.execute(
@@ -396,7 +407,6 @@ app.get('/api/tratamientos', async (req, res) => {
 // RUTAS ADICIONALES PARA EL PORTAL MÉDICO
 // ──────────────────────────────────────────
 
-// Dashboard stats para el médico
 app.get('/api/stats', verifyDoctor, async (req, res) => {
   try {
     const conn = await pool.getConnection();
@@ -438,17 +448,13 @@ app.get('/', (req, res) => {
 // =====================================================
 // ⚠️  ENDPOINT TEMPORAL PARA IMPORTAR LA BASE DE DATOS
 // =====================================================
-// Visita https://tu-dominio.railway.app/api/setup-db una sola vez.
-// Luego elimina o comenta este bloque por seguridad.
 app.get('/api/setup-db', async (req, res) => {
   try {
-    // Leer los archivos SQL
     const dbSql = fs.readFileSync(path.join(__dirname, 'database.sql'), 'utf8');
     const migrationSql = fs.readFileSync(path.join(__dirname, 'migration.sql'), 'utf8');
 
     const conn = await pool.getConnection();
 
-    // Ejecutar cada sentencia por separado (separadas por punto y coma)
     const executeSql = async (sqlContent) => {
       const statements = sqlContent.split(';').filter(stmt => stmt.trim().length > 0);
       for (let stmt of statements) {
