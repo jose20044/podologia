@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PodologíAPP – Historia Clínica Podológica</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Merriweather:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Nunito', sans-serif;
+  background: #f0f0f0;
+  color: #333;
+  min-height: 100vh;
+}
+
+/* HEADER */
+header {
+  background: #8b1a2f;
+  padding: 18px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.header-icon {
+  font-size: 32px;
+}
+.header-text h1 {
+  font-family: 'Merriweather', serif;
+  font-size: 26px;
+  color: white;
+  letter-spacing: -0.5px;
+}
+.header-text p {
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+.logo-placeholder {
+  border: 2px dashed rgba(255,255,255,0.4);
+  border-radius: 10px;
+  width: 90px;
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.5);
+  font-size: 11px;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.logo-placeholder:hover { border-color: rgba(255,255,255,0.8); color: rgba(255,255,255,0.9); }
+.logo-placeholder span { font-size: 20px; }
+#logo-file { display: none; }
+#logo-preview { max-width: 86px; max-height: 60px; border-radius: 8px; display: none; }
+
+/* MAIN */
+.container {
+  max-width: 860px;
+  margin: 32px auto;
+  padding: 0 16px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* SECTIONS */
+.section {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  padding: 28px 32px;
+  animation: fadeUp 0.4s ease both;
+}
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(16px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.section:nth-child(2)  { animation-delay:0.05s; }
+.section:nth-child(3)  { animation-delay:0.10s; }
+.section:nth-child(4)  { animation-delay:0.15s; }
+.section:nth-child(5)  { animation-delay:0.20s; }
+.section:nth-child(6)  { animation-delay:0.25s; }
+.section:nth-child(7)  { animation-delay:0.30s; }
+.section:nth-child(8)  { animation-delay:0.35s; }
+.section:nth-child(9)  { animation-delay:0.40s; }
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 800;
+  color: #2a2a2a;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1.5px solid #ebebeb;
+}
+.section-title .icon { font-size: 22px; }
+
+/* REQUIRED badge */
+.section-title.required-section::after {
+  content: '⚠';
+  color: #c0392b;
+  font-size: 16px;
+  margin-left: auto;
+}
+
+/* FORM GRID */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group.full { grid-column: 1 / -1; }
+.form-group.col3 { grid-column: span 1; }
+
+label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #555;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  padding: 10px 14px;
+  border: 1.5px solid #ddd;
+  border-radius: 10px;
+  background: #fafafa;
+  color: #333;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: #c0392b;
+  box-shadow: 0 0 0 3px rgba(192,57,43,0.10);
+  background: white;
+}
+textarea { resize: vertical; min-height: 72px; }
+select { cursor: pointer; }
+
+/* RADIO / CHECKBOX GROUPS */
+.check-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  background: #f7f7f7;
+  border: 1.5px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.check-group.col2 { grid-template-columns: 1fr 1fr; }
+.check-group.col1 { grid-template-columns: 1fr; }
+
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #444;
+  user-select: none;
+}
+.check-item input[type="checkbox"],
+.check-item input[type="radio"] {
+  width: 17px;
+  height: 17px;
+  min-width: 17px;
+  accent-color: #c0392b;
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+
+/* SLIDER */
+.slider-wrap { display: flex; align-items: center; gap: 14px; }
+input[type="range"] {
+  flex: 1;
+  height: 6px;
+  accent-color: #c0392b;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+.slider-val {
+  background: #c0392b;
+  color: white;
+  font-weight: 800;
+  font-size: 15px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* SUBSECTION */
+.subsection {
+  border: 1.5px dashed #ddd;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.subsection-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #8b1a2f;
+  margin-bottom: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* FOTO UPLOAD */
+.foto-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.foto-box {
+  border: 2px dashed #ccc;
+  border-radius: 12px;
+  padding: 20px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #f9f9f9;
+  position: relative;
+  overflow: hidden;
+}
+.foto-box:hover { border-color: #c0392b; background: #fff5f5; }
+.foto-box .foto-icon { font-size: 28px; color: #bbb; }
+.foto-box p { font-size: 12px; color: #999; line-height: 1.4; }
+.foto-box img { max-width: 100%; max-height: 90px; border-radius: 8px; object-fit: cover; }
+.foto-box input { position: absolute; inset:0; opacity:0; cursor:pointer; }
+.foto-label { font-size: 12px; font-weight: 700; color: #666; margin-bottom: 8px; }
+
+/* CONSENTIMIENTO */
+.consent-box {
+  background: #f9f9f9;
+  border: 1.5px solid #ddd;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #444;
+  max-height: 140px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+}
+.consent-box strong { color: #222; }
+
+.consent-accept {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f7f7f7;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 14px 18px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #444;
+  transition: all 0.2s;
+}
+.consent-accept input { width:18px;height:18px;accent-color:#c0392b;padding:0;border:none;background:none;box-shadow:none; }
+.consent-accept.accepted { border-color: #c0392b; background: #fff0f0; color: #8b1a2f; }
+
+/* FIRMAS */
+.firmas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.firma-block { display: flex; flex-direction: column; gap: 8px; }
+.firma-block label { font-size: 13px; font-weight: 700; color: #555; }
+.firma-canvas-wrap { position: relative; border: 2px solid #c0392b; border-radius: 12px; overflow: hidden; background: white; }
+canvas.firma-canvas { display: block; width: 100%; height: 130px; cursor: crosshair; touch-action: none; }
+.firma-clear {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  background: #e8e8e8;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  color: #555;
+  transition: background 0.2s;
+}
+.firma-clear:hover { background: #c0392b; color: white; }
+
+/* BOTONES FINALES */
+.actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+}
+.btn-generate {
+  flex: 1;
+  background: #2a2a2a;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 24px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-generate:hover { background: #111; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+.btn-reset {
+  background: #9e9e9e;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 24px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-reset:hover { background: #757575; }
+
+/* PDF BUTTON */
+.btn-pdf {
+  flex: 1;
+  background: linear-gradient(135deg, #8b1a2f 0%, #c0392b 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 24px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-pdf:hover { filter: brightness(1.12); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(139,26,47,0.35); }
+.btn-pdf:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+/* LOADING OVERLAY */
+#pdf-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  z-index: 9999;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+#pdf-overlay.show { display: flex; }
+.pdf-spinner {
+  width: 56px; height: 56px;
+  border: 5px solid rgba(255,255,255,0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#pdf-overlay p {
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+#pdf-overlay small {
+  color: rgba(255,255,255,0.6);
+  font-size: 12px;
+}
+@media print {
+  body { background: white; }
+  header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .section { box-shadow: none; border: 1px solid #ddd; }
+  .actions { display: none; }
+  .firma-clear { display: none; }
+}
+
+@media (max-width: 600px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .check-group { grid-template-columns: 1fr 1fr; }
+  .foto-grid { grid-template-columns: 1fr; }
+  .firmas-grid { grid-template-columns: 1fr; }
+  header { padding: 14px 18px; }
+  .header-text h1 { font-size: 20px; }
+  .container { padding: 0 10px 60px; }
+  .section { padding: 20px 16px; }
+  .actions { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-brand">
+    <div class="header-icon">🦶</div>
+    <div class="header-text">
+      <h1>PodologíAPP</h1>
+      <p>Historia Clínica Podológica</p>
+    </div>
+  </div>
+  <label class="logo-placeholder" for="logo-file">
+    <span>🖼️</span>
+    <span>Tu logotipo aquí</span>
+    <img id="logo-preview" alt="Logo">
+  </label>
+  <input type="file" id="logo-file" accept="image/*">
+</header>
+
+<div class="container">
+
+  <!-- 1. INFORMACIÓN DEL ESPECIALISTA -->
+  <div class="section">
+    <div class="section-title"><span class="icon">👨‍⚕️</span> Información del Especialista</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Nombre del Especialista:</label>
+        <input type="text" id="esp-nombre" placeholder="Nombre completo">
+      </div>
+      <div class="form-group">
+        <label>Especialidad:</label>
+        <select id="esp-especialidad">
+          <option value="Podólogo">Podólogo</option>
+          <option value="Podólogo Clínico">Podólogo Clínico</option>
+          <option value="Ortopodólogo">Ortopodólogo</option>
+          <option value="Fisioterapeuta Podólogo">Fisioterapeuta Podólogo</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Clínica / Centro de Salud:</label>
+        <input type="text" id="esp-clinica" placeholder="Nombre del centro">
+      </div>
+      <div class="form-group">
+        <label>Teléfono de Contacto:</label>
+        <input type="tel" id="esp-tel" placeholder="+56 9 xxxx xxxx">
+      </div>
+      <div class="form-group">
+        <label>Correo de Contacto:</label>
+        <input type="email" id="esp-email" placeholder="correo@clinica.com">
+      </div>
+      <div class="form-group">
+        <label>Fecha de Valoración:</label>
+        <input type="date" id="esp-fecha">
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. DATOS DEL PACIENTE -->
+  <div class="section">
+    <div class="section-title"><span class="icon">🧑</span> Datos del Paciente</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Nombre Completo:</label>
+        <input type="text" id="pac-nombre" placeholder="Nombre y apellidos">
+      </div>
+      <div class="form-group">
+        <label>Edad:</label>
+        <input type="number" id="pac-edad" placeholder="Años" min="0" max="120">
+      </div>
+      <div class="form-group">
+        <label>Sexo:</label>
+        <div class="check-group col1">
+          <label class="check-item"><input type="radio" name="sexo" value="Masculino"> Masculino</label>
+          <label class="check-item"><input type="radio" name="sexo" value="Femenino"> Femenino</label>
+          <label class="check-item"><input type="radio" name="sexo" value="Otro"> Otro</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Teléfono:</label>
+        <input type="tel" id="pac-tel" placeholder="+56 9 xxxx xxxx">
+      </div>
+      <div class="form-group">
+        <label>Domicilio:</label>
+        <input type="text" id="pac-domicilio" placeholder="Dirección">
+      </div>
+      <div class="form-group">
+        <label>Ocupación:</label>
+        <input type="text" id="pac-ocupacion" placeholder="Profesión u oficio">
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. ANTECEDENTES PODOLÓGICOS Y MÉDICOS -->
+  <div class="section">
+    <div class="section-title"><span class="icon">📋</span> Antecedentes Podológicos y Médicos</div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>Condiciones Relevantes:</label>
+      <div class="check-group">
+        <label class="check-item"><input type="checkbox" name="cond" value="Diabetes Mellitus"> Diabetes Mellitus</label>
+        <label class="check-item"><input type="checkbox" name="cond" value="Hipertensión arterial"> Hipertensión arterial</label>
+        <label class="check-item"><input type="checkbox" name="cond" value="Problemas vasculares"> Problemas vasculares</label>
+        <label class="check-item"><input type="checkbox" name="cond" value="Pie plano / pie cavo"> Pie plano / pie cavo</label>
+        <label class="check-item"><input type="checkbox" name="cond" value="Antecedentes de onicomicosis"> Antecedentes de onicomicosis</label>
+        <label class="check-item"><input type="checkbox" name="cond" value="Cirugías previas podológicas"> Cirugías previas podológicas</label>
+        <label class="check-item"><input type="checkbox" name="cond" value="Traumatismos en miembros inferiores"> Traumatismos en miembros inferiores</label>
+        <label class="check-item"><input type="checkbox" name="cond" value="Otros"> Otros</label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Si aplica: Tratamiento médico actual (para DM/otras crónicas):</label>
+      <select id="trat-actual">
+        <option value="">Seleccione</option>
+        <option>Insulina</option>
+        <option>Antidiabéticos orales</option>
+        <option>Antihipertensivos</option>
+        <option>Anticoagulantes</option>
+        <option>Inmunosupresores</option>
+        <option>Otro tratamiento</option>
+        <option>No aplica</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 4. ESTILO DE VIDA Y HÁBITOS -->
+  <div class="section">
+    <div class="section-title"><span class="icon">🏃</span> Estilo de Vida y Hábitos</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Actividad física:</label>
+        <div class="check-group">
+          <label class="check-item"><input type="radio" name="actividad" value="Sedentario"> Sedentario</label>
+          <label class="check-item"><input type="radio" name="actividad" value="Leve"> Leve</label>
+          <label class="check-item"><input type="radio" name="actividad" value="Moderada"> Moderada</label>
+          <label class="check-item"><input type="radio" name="actividad" value="Intensa"> Intensa</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Tipo de calzado que usa normalmente:</label>
+        <select id="calzado">
+          <option value="">Seleccione</option>
+          <option>Zapato de vestir</option>
+          <option>Zapatilla deportiva</option>
+          <option>Sandalia / Chancla</option>
+          <option>Zapato de seguridad / industrial</option>
+          <option>Calzado ortopédico</option>
+          <option>Descalzo habitualmente</option>
+          <option>Tacón alto</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Frecuencia de caminata (Tiempo o distancia):</label>
+        <input type="text" id="caminata" placeholder="Ej. 30 minutos al día, 5 km a la semana, etc.">
+      </div>
+      <div class="form-group full">
+        <label>Hábitos tóxicos:</label>
+        <div class="check-group">
+          <label class="check-item"><input type="checkbox" name="hab" value="Tabaquismo"> Tabaquismo</label>
+          <label class="check-item"><input type="checkbox" name="hab" value="Alcohol"> Alcohol</label>
+          <label class="check-item"><input type="checkbox" name="hab" value="Otros (drogas)"> Otros (drogas)</label>
+          <label class="check-item"><input type="checkbox" name="hab" value="Ninguno"> Ninguno</label>
+        </div>
+      </div>
+      <div class="form-group full">
+        <label>Nivel de estrés percibido (1–10):</label>
+        <div class="slider-wrap">
+          <input type="range" id="estres" min="1" max="10" value="5" oninput="document.getElementById('estres-val').textContent=this.value">
+          <div class="slider-val" id="estres-val">5</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. EXPLORACIÓN CLÍNICA PODOLÓGICA -->
+  <div class="section">
+    <div class="section-title"><span class="icon">🦶</span> Exploración Clínica Podológica</div>
+
+    <div class="subsection">
+      <div class="subsection-title">Evaluación Podológica Específica</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Uñas:</label>
+          <div class="check-group col1">
+            <label class="check-item"><input type="checkbox" name="unas" value="Sanas"> Sanas</label>
+            <label class="check-item"><input type="checkbox" name="unas" value="Onicomicosis"> Onicomicosis</label>
+            <label class="check-item"><input type="checkbox" name="unas" value="Onicogrifosis"> Onicogrifosis</label>
+            <label class="check-item"><input type="checkbox" name="unas" value="Onicocriptosis (Uña encarnada)"> Onicocriptosis (Uña encarnada)</label>
+            <label class="check-item"><input type="checkbox" name="unas" value="Otros"> Otros</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Piel y Tegumentos:</label>
+          <div class="check-group col1">
+            <label class="check-item"><input type="checkbox" name="piel" value="Sana"> Sana</label>
+            <label class="check-item"><input type="checkbox" name="piel" value="Hiperqueratosis (Callosidad)"> Hiperqueratosis (Callosidad)</label>
+            <label class="check-item"><input type="checkbox" name="piel" value="Maceración interdigital"> Maceración interdigital</label>
+            <label class="check-item"><input type="checkbox" name="piel" value="Verrugas plantares"> Verrugas plantares</label>
+            <label class="check-item"><input type="checkbox" name="piel" value="Eccemas/dermatitis"> Eccemas/dermatitis</label>
+            <label class="check-item"><input type="checkbox" name="piel" value="Grietas/Fisuras"> Grietas/Fisuras</label>
+            <label class="check-item"><input type="checkbox" name="piel" value="Heridas/Úlceras"> Heridas/Úlceras</label>
+            <label class="check-item"><input type="checkbox" name="piel" value="Otros"> Otros</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="subsection">
+      <div class="subsection-title">Evaluación Biomecánica y Vascular/Neurológica</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Marcha y Postura:</label>
+          <select id="marcha">
+            <option>Normal</option>
+            <option>Antálgica</option>
+            <option>En equino</option>
+            <option>Alterada</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Exploración Vascular (Pulsos):</label>
+          <select id="pulsos">
+            <option>Normal</option>
+            <option>Disminuido</option>
+            <option>Ausente</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Llenado Capilar:</label>
+          <select id="llenado">
+            <option>Normal (&lt; 2 seg)</option>
+            <option>Lento (2-3 seg)</option>
+            <option>Muy lento (&gt; 3 seg)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Temperatura del Pie:</label>
+          <select id="temperatura">
+            <option>Normal</option>
+            <option>Fría</option>
+            <option>Caliente</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Exploración Neurológica Básica:</label>
+          <select id="neurologia">
+            <option>Sensibilidad Conservada</option>
+            <option>Hipoestesia leve</option>
+            <option>Hipoestesia severa</option>
+            <option>Anestesia</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Lado(s) Afectado(s):</label>
+          <select id="lado">
+            <option>N/A</option>
+            <option>Pie Derecho</option>
+            <option>Pie Izquierdo</option>
+            <option>Ambos pies</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Observaciones Adicionales de la Exploración:</label>
+          <textarea id="obs-exploracion" placeholder="Describa aquí hallazgos no contemplados, deformidades o el área principal de la lesión."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. PLAN DE TRATAMIENTO -->
+  <div class="section">
+    <div class="section-title"><span class="icon">💊</span> Plan de Tratamiento Sugerido</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Indicaciones de Higiene del pie:</label>
+        <textarea id="trat-higiene" placeholder="Ej. Lavar diariamente con jabón neutro, secar meticulosamente entre los dedos, aplicar crema hidratante (evitando interdigital)"></textarea>
+      </div>
+      <div class="form-group full">
+        <label>Corte y Cuidado de Uñas:</label>
+        <textarea id="trat-unas" placeholder="Ej. Corte recto, no redondear esquinas. Limar si hay onicogrifosis."></textarea>
+      </div>
+      <div class="form-group full">
+        <label>Tratamientos Antimicóticos (Si Aplica):</label>
+        <textarea id="trat-antimico" placeholder="Ej. Aplicar laca/crema fungicida en uñas afectadas, tratamiento oral si es sistémico."></textarea>
+      </div>
+      <div class="form-group full">
+        <label>Órtesis Plantares / Calzado Especial (Si Aplica):</label>
+        <textarea id="trat-ortesis" placeholder="Ej. Evaluar plantillas de descarga a medida, calzado de horma ancha y puntera alta."></textarea>
+      </div>
+      <div class="form-group full">
+        <label>Seguimiento Podológico (Próxima Cita):</label>
+        <textarea id="trat-seguimiento" placeholder="Ej. Revaloración en 15 días para quiropodia, seguimiento trimestral."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. FOTOGRAFÍA CLÍNICA -->
+  <div class="section">
+    <div class="section-title required-section"><span class="icon">📸</span> Fotografía Clínica</div>
+    <div class="foto-grid">
+      <div>
+        <div class="foto-label">Imagen 1: Vista General / Lesión Principal:</div>
+        <div class="foto-box" id="foto1-box">
+          <input type="file" accept="image/*" onchange="previewFoto(this,'foto1-box')">
+          <div class="foto-icon">🖼️</div>
+          <p>Haga clic para subir imagen</p>
+        </div>
+      </div>
+      <div>
+        <div class="foto-label">Imagen 2: Detalle (Uñas / Planta / Lateral):</div>
+        <div class="foto-box" id="foto2-box">
+          <input type="file" accept="image/*" onchange="previewFoto(this,'foto2-box')">
+          <div class="foto-icon">🖼️</div>
+          <p>Haga clic para subir imagen</p>
+        </div>
+      </div>
+      <div>
+        <div class="foto-label">Imagen 3: Detalle (Estructura / Biomecánica):</div>
+        <div class="foto-box" id="foto3-box">
+          <input type="file" accept="image/*" onchange="previewFoto(this,'foto3-box')">
+          <div class="foto-icon">🖼️</div>
+          <p>Haga clic para subir imagen</p>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Comentarios sobre las fotografías:</label>
+      <textarea id="foto-comentarios" placeholder="Ej. Vista dorsal del pie izquierdo, se observa onicomicosis en el primer dedo. La segunda foto muestra callosidad submetatarsal en el segundo dedo."></textarea>
+    </div>
+  </div>
+
+  <!-- 8. CONSENTIMIENTO INFORMADO -->
+  <div class="section">
+    <div class="section-title required-section"><span class="icon">⚠️</span> Consentimiento Informado</div>
+    <div class="consent-box">
+      <strong>Otorgo mi consentimiento para la valoración, diagnóstico y tratamiento podológico por parte del profesional sanitario.</strong><br><br>
+      Entiendo que el proceso incluye la exploración de mis pies y la toma de fotografías clínicas, las cuales se usarán para mi expediente y seguimiento.<br><br>
+      He recibido explicaciones sobre mi condición y el plan de tratamiento sugerido, y mis dudas han sido resueltas. Acepto riesgos y beneficios los procedimientos.
+    </div>
+    <label class="consent-accept" id="consent-label">
+      <input type="radio" name="consent" id="consent-radio" onchange="toggleConsent()">
+      He leído y acepto el consentimiento informado.
+    </label>
+  </div>
+
+  <!-- 9. FIRMAS -->
+  <div class="section">
+    <div class="section-title"><span class="icon">✍️</span> Firmas de Conformidad</div>
+    <div class="firmas-grid">
+      <div class="firma-block">
+        <label>Firma del paciente o responsable:</label>
+        <div class="firma-canvas-wrap">
+          <canvas class="firma-canvas" id="canvas-paciente" width="360" height="130"></canvas>
+          <button class="firma-clear" onclick="limpiarFirma('canvas-paciente')">Limpiar</button>
+        </div>
+      </div>
+      <div class="firma-block">
+        <label>Firma del profesional tratante:</label>
+        <div class="firma-canvas-wrap">
+          <canvas class="firma-canvas" id="canvas-profesional" width="360" height="130"></canvas>
+          <button class="firma-clear" onclick="limpiarFirma('canvas-profesional')">Limpiar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTONES -->
+  <div class="actions">
+    <button class="btn-pdf" id="btn-pdf" onclick="generarPDF()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+      DESCARGAR PDF
+    </button>
+    <button class="btn-generate" onclick="generarReporte()">🖨️ IMPRIMIR</button>
+    <button class="btn-reset" onclick="reiniciarFormulario()">↺ REINICIAR</button>
+  </div>
+
+</div><!-- /container -->
+
+<!-- LOADING OVERLAY -->
+<div id="pdf-overlay">
+  <div class="pdf-spinner"></div>
+  <p id="pdf-status">Generando PDF...</p>
+  <small>Por favor espere, esto puede tomar unos segundos</small>
+</div>
+
+<script>
+// LOGO PREVIEW
+document.getElementById('logo-file').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const img = document.getElementById('logo-preview');
+    img.src = ev.target.result;
+    img.style.display = 'block';
+    document.querySelector('.logo-placeholder span:first-of-type').style.display = 'none';
+    document.querySelector('.logo-placeholder span:last-of-type').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+});
+
+// FOTO PREVIEW
+function previewFoto(input, boxId) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const box = document.getElementById(boxId);
+    box.innerHTML = `<input type="file" accept="image/*" onchange="previewFoto(this,'${boxId}')"><img src="${ev.target.result}" style="max-width:100%;max-height:90px;border-radius:8px;object-fit:cover;">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+// CONSENTIMIENTO
+function toggleConsent() {
+  const label = document.getElementById('consent-label');
+  label.classList.toggle('accepted', document.getElementById('consent-radio').checked);
+}
+
+// FIRMA CANVAS
+function setupCanvas(canvasId) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  // Resize canvas to actual display size
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = rect.width * ratio;
+    canvas.height = rect.height * ratio;
+    ctx.scale(ratio, ratio);
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  let drawing = false;
+  let lastX = 0, lastY = 0;
+
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  canvas.addEventListener('mousedown', e => { drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+  canvas.addEventListener('mousemove', e => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); lastX = p.x; lastY = p.y; });
+  canvas.addEventListener('mouseup', () => drawing = false);
+  canvas.addEventListener('mouseleave', () => drawing = false);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; ctx.beginPath(); ctx.moveTo(p.x, p.y); }, {passive:false});
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); }, {passive:false});
+  canvas.addEventListener('touchend', () => drawing = false);
+}
+
+function limpiarFirma(canvasId) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+setupCanvas('canvas-paciente');
+setupCanvas('canvas-profesional');
+
+// SET DEFAULT DATE
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('esp-fecha').value = today;
+
+function getQueryParams() {
+  return Object.fromEntries(new URLSearchParams(window.location.search));
+}
+
+function populatePacienteDesdeQuery() {
+  const params = getQueryParams();
+  if (params.pacienteNombre) document.getElementById('pac-nombre').value = params.pacienteNombre;
+  if (params.pacienteEdad) document.getElementById('pac-edad').value = params.pacienteEdad;
+  if (params.pacienteTel) document.getElementById('pac-tel').value = params.pacienteTel;
+}
+
+populatePacienteDesdeQuery();
+
+// PRINT
+function generarReporte() {
+  if (!document.getElementById('consent-radio').checked) {
+    alert('⚠️ El paciente debe aceptar el consentimiento informado antes de generar el reporte.');
+    return;
+  }
+  window.print();
+}
+
+// PDF GENERATION
+async function generarPDF() {
+  if (!document.getElementById('consent-radio').checked) {
+    alert('⚠️ El paciente debe aceptar el consentimiento informado antes de generar el PDF.');
+    return;
+  }
+
+  const overlay = document.getElementById('pdf-overlay');
+  const status  = document.getElementById('pdf-status');
+  const btn     = document.getElementById('btn-pdf');
+  btn.disabled  = true;
+  overlay.classList.add('show');
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageW = 210, pageH = 297, margin = 10;
+    const contentW = pageW - margin * 2;
+
+    // ── Collect form data ────────────────────────────────────────────────────
+    const data = {
+      espNombre:      v('esp-nombre'),
+      espEspecialidad:document.getElementById('esp-especialidad').value,
+      espClinica:     v('esp-clinica'),
+      espTel:         v('esp-tel'),
+      espEmail:       v('esp-email'),
+      espFecha:       v('esp-fecha'),
+      pacNombre:      v('pac-nombre'),
+      pacEdad:        v('pac-edad'),
+      pacSexo:        radVal('sexo'),
+      pacTel:         v('pac-tel'),
+      pacDomicilio:   v('pac-domicilio'),
+      pacOcupacion:   v('pac-ocupacion'),
+      condiciones:    checkVals('cond'),
+      tratActual:     document.getElementById('trat-actual').value,
+      actividad:      radVal('actividad'),
+      calzado:        document.getElementById('calzado').value,
+      caminata:       v('caminata'),
+      habitos:        checkVals('hab'),
+      estres:         document.getElementById('estres').value,
+      unas:           checkVals('unas'),
+      piel:           checkVals('piel'),
+      marcha:         document.getElementById('marcha').value,
+      pulsos:         document.getElementById('pulsos').value,
+      llenado:        document.getElementById('llenado').value,
+      temperatura:    document.getElementById('temperatura').value,
+      neurologia:     document.getElementById('neurologia').value,
+      lado:           document.getElementById('lado').value,
+      obsExploracion: v('obs-exploracion'),
+      tratHigiene:    v('trat-higiene'),
+      tratUnas:       v('trat-unas'),
+      tratAntimico:   v('trat-antimico'),
+      tratOrtesis:    v('trat-ortesis'),
+      tratSeguimiento:v('trat-seguimiento'),
+      fotoComentarios:v('foto-comentarios'),
+    };
+
+    function v(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+    function radVal(name) { const el = document.querySelector(`input[name="${name}"]:checked`); return el ? el.value : '—'; }
+    function checkVals(name) {
+      const checked = [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(e => e.value);
+      return checked.length ? checked.join(', ') : '—';
+    }
+    // re-run (closures need to be before use)
+    Object.assign(data, {
+      espNombre:      document.getElementById('esp-nombre').value.trim(),
+      espEspecialidad:document.getElementById('esp-especialidad').value,
+      espClinica:     document.getElementById('esp-clinica').value.trim(),
+      espTel:         document.getElementById('esp-tel').value.trim(),
+      espEmail:       document.getElementById('esp-email').value.trim(),
+      espFecha:       document.getElementById('esp-fecha').value,
+      pacNombre:      document.getElementById('pac-nombre').value.trim(),
+      pacEdad:        document.getElementById('pac-edad').value.trim(),
+      pacSexo:        radVal('sexo'),
+      pacTel:         document.getElementById('pac-tel').value.trim(),
+      pacDomicilio:   document.getElementById('pac-domicilio').value.trim(),
+      pacOcupacion:   document.getElementById('pac-ocupacion').value.trim(),
+      condiciones:    checkVals('cond'),
+      tratActual:     document.getElementById('trat-actual').value,
+      actividad:      radVal('actividad'),
+      calzado:        document.getElementById('calzado').value,
+      caminata:       document.getElementById('caminata').value.trim(),
+      habitos:        checkVals('hab'),
+      estres:         document.getElementById('estres').value,
+      unas:           checkVals('unas'),
+      piel:           checkVals('piel'),
+      marcha:         document.getElementById('marcha').value,
+      pulsos:         document.getElementById('pulsos').value,
+      llenado:        document.getElementById('llenado').value,
+      temperatura:    document.getElementById('temperatura').value,
+      neurologia:     document.getElementById('neurologia').value,
+      lado:           document.getElementById('lado').value,
+      obsExploracion: document.getElementById('obs-exploracion').value.trim(),
+      tratHigiene:    document.getElementById('trat-higiene').value.trim(),
+      tratUnas:       document.getElementById('trat-unas').value.trim(),
+      tratAntimico:   document.getElementById('trat-antimico').value.trim(),
+      tratOrtesis:    document.getElementById('trat-ortesis').value.trim(),
+      tratSeguimiento:document.getElementById('trat-seguimiento').value.trim(),
+      fotoComentarios:document.getElementById('foto-comentarios').value.trim(),
+    });
+
+    // ── Safe text: strip accents so jsPDF helvetica renders correctly ─────────
+    function st(str) {
+      if (!str) return '';
+      return String(str).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
+    // ── PDF helpers ──────────────────────────────────────────────────────────
+    let y = 0;
+
+    function checkPage(needed = 10) {
+      if (y + needed > pageH - 14) { pdf.addPage(); y = 16; }
+    }
+
+    function drawHeader() {
+      // Main burgundy bar
+      pdf.setFillColor(139, 26, 47);
+      pdf.rect(0, 0, pageW, 28, 'F');
+      // Decorative left accent strip
+      pdf.setFillColor(192, 57, 43);
+      pdf.rect(0, 0, 4, 28, 'F');
+      // Bottom accent line
+      pdf.setFillColor(210, 80, 80);
+      pdf.rect(0, 28, pageW, 1.5, 'F');
+
+      // App name
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(16);
+      pdf.text('PodologiAPP', margin + 4, 12);
+
+      // Subtitle
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(9);
+      pdf.setTextColor(255, 200, 200);
+      pdf.text('Ficha del Paciente  -  Historia Clinica Podologica', margin + 4, 21);
+
+      // Logo if available
+      const logoImg = document.getElementById('logo-preview');
+      if (logoImg && logoImg.src && logoImg.style.display !== 'none') {
+        try { pdf.addImage(logoImg, 'PNG', pageW - 34, 2, 24, 24); } catch(e) {}
+      }
+      y = 36;
+    }
+
+    function sectionTitle(title) {
+      checkPage(16);
+      pdf.setFillColor(245, 245, 245);
+      pdf.roundedRect(margin, y, contentW, 9, 2, 2, 'F');
+      pdf.setDrawColor(139, 26, 47);
+      pdf.setLineWidth(0.5);
+      pdf.line(margin, y + 9, margin + contentW, y + 9);
+      pdf.setTextColor(139, 26, 47);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(11);
+      pdf.text(st(title), margin + 3, y + 6.2);
+      y += 13;
+    }
+
+    function field(label, value, x, fw, row_y) {
+      pdf.setTextColor(120, 120, 120);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.text(st(label) + ':', x, row_y);
+      pdf.setTextColor(30, 30, 30);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      const val = st(value) || '---';
+      const lines = pdf.splitTextToSize(val, fw - 2);
+      pdf.text(lines, x, row_y + 4.5);
+      return lines.length * 4.5;
+    }
+
+    function twoFields(lbl1, val1, lbl2, val2) {
+      checkPage(16);
+      const h1 = field(lbl1, val1, margin, contentW / 2 - 2, y);
+      const h2 = field(lbl2, val2, margin + contentW / 2, contentW / 2 - 2, y);
+      y += Math.max(h1, h2) + 9;
+    }
+
+    function oneField(lbl, val) {
+      checkPage(20);
+      const lines = pdf.splitTextToSize(val || '—', contentW - 2);
+      const h = field(lbl, val, margin, contentW - 2, y);
+      y += h + 9;
+    }
+
+    function subSection(title) {
+      checkPage(12);
+      pdf.setTextColor(80, 80, 80);
+      pdf.setFont('helvetica', 'bolditalic');
+      pdf.setFontSize(8.5);
+      pdf.text('>> ' + st(title), margin + 1, y);
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.3);
+      pdf.line(margin + 1, y + 1.5, margin + contentW, y + 1.5);
+      y += 6;
+    }
+
+    function separator() {
+      checkPage(8);
+      pdf.setDrawColor(230, 230, 230);
+      pdf.setLineWidth(0.3);
+      pdf.line(margin, y, margin + contentW, y);
+      y += 5;
+    }
+
+    // ── PAGE 1 ───────────────────────────────────────────────────────────────
+    status.textContent = 'Construyendo página 1...';
+    drawHeader();
+
+    sectionTitle('1. INFORMACION DEL ESPECIALISTA');
+    twoFields('Nombre del Especialista', data.espNombre, 'Especialidad', data.espEspecialidad);
+    twoFields('Clínica / Centro de Salud', data.espClinica, 'Teléfono', data.espTel);
+    twoFields('Correo', data.espEmail, 'Fecha de Valoración', data.espFecha);
+    separator();
+
+    sectionTitle('2. DATOS DEL PACIENTE');
+
+    twoFields('Nombre Completo', data.pacNombre, 'Edad', data.pacEdad ? data.pacEdad + ' años' : '—');
+    twoFields('Sexo', data.pacSexo, 'Teléfono', data.pacTel);
+    twoFields('Domicilio', data.pacDomicilio, 'Ocupación', data.pacOcupacion);
+    separator();
+
+    sectionTitle('3. ANTECEDENTES PODOLOGICOS Y MEDICOS');
+    oneField('Condiciones Relevantes', data.condiciones);
+    oneField('Tratamiento medico actual', data.tratActual || '—');
+    separator();
+
+    sectionTitle('4. ESTILO DE VIDA Y HABITOS');
+    twoFields('Actividad Fisica', data.actividad, 'Tipo de Calzado', data.calzado || '—');
+    twoFields('Frecuencia de Caminata', data.caminata || '—', 'Nivel de Estres (1-10)', data.estres + '/10');
+    oneField('Habitos Toxicos', data.habitos);
+    separator();
+
+    // ── PAGE 2 ───────────────────────────────────────────────────────────────
+    status.textContent = 'Construyendo página 2...';
+    pdf.addPage();
+    drawHeader();
+
+    sectionTitle('5. EXPLORACION CLINICA PODOLOGICA');
+    subSection('Evaluacion Podologica Especifica');
+    oneField('Estado de Unas', data.unas);
+    oneField('Piel y Tegumentos', data.piel);
+    subSection('Evaluacion Biomecanica y Vascular/Neurologica');
+    twoFields('Marcha y Postura', data.marcha, 'Exploracion Vascular (Pulsos)', data.pulsos);
+    twoFields('Llenado Capilar', data.llenado, 'Temperatura del Pie', data.temperatura);
+    twoFields('Exploracion Neurologica', data.neurologia, 'Lado(s) Afectado(s)', data.lado);
+    oneField('Observaciones Adicionales', data.obsExploracion);
+    separator();
+
+    sectionTitle('6. PLAN DE TRATAMIENTO SUGERIDO');
+    oneField('Indicaciones de Higiene del Pie', data.tratHigiene);
+    oneField('Corte y Cuidado de Unas', data.tratUnas);
+    oneField('Tratamientos Antimicoticos', data.tratAntimico);
+    oneField('Ortesis Plantares / Calzado Especial', data.tratOrtesis);
+    oneField('Seguimiento Podologico (Proxima Cita)', data.tratSeguimiento);
+    separator();
+
+    // ── PAGE 3 ───────────────────────────────────────────────────────────────
+    status.textContent = 'Procesando fotografías...';
+    pdf.addPage();
+    drawHeader();
+
+    sectionTitle('7. FOTOGRAFIA CLINICA');
+    const fotoIds = ['foto1-box','foto2-box','foto3-box'];
+    const fotoLabels = ['Vista General / Lesion Principal', 'Detalle (Unas / Planta / Lateral)', 'Detalle (Estructura / Biomecanica)'];
+    let fotoX = margin;
+    const fotoW = (contentW - 8) / 3;
+    const fotoH = 45;
+    for (let i = 0; i < 3; i++) {
+      const box = document.getElementById(fotoIds[i]);
+      const img = box ? box.querySelector('img') : null;
+      // label
+      pdf.setTextColor(100,100,100);
+      pdf.setFont('helvetica','normal');
+      pdf.setFontSize(7);
+      const lblLines = pdf.splitTextToSize(st(fotoLabels[i]), fotoW);
+      pdf.text(lblLines, fotoX, y);
+      const lblH = lblLines.length * 3.5;
+      // image or placeholder
+      if (img && img.src) {
+        try {
+          pdf.addImage(img.src, 'JPEG', fotoX, y + lblH + 1, fotoW, fotoH);
+        } catch(e) {
+          pdf.setFillColor(240,240,240);
+          pdf.roundedRect(fotoX, y + lblH + 1, fotoW, fotoH, 2, 2, 'F');
+          pdf.setTextColor(180,180,180);
+          pdf.setFontSize(7);
+          pdf.text('Sin imagen', fotoX + fotoW/2 - 7, y + lblH + fotoH/2 + 1);
+        }
+      } else {
+        pdf.setFillColor(240,240,240);
+        pdf.roundedRect(fotoX, y + lblH + 1, fotoW, fotoH, 2, 2, 'F');
+        pdf.setTextColor(180,180,180);
+        pdf.setFontSize(7);
+        pdf.text('Sin imagen', fotoX + fotoW/2 - 7, y + lblH + fotoH/2 + 1);
+      }
+      fotoX += fotoW + 4;
+    }
+    y += 12 + fotoH;
+    oneField('Comentarios sobre las fotografías', data.fotoComentarios);
+    separator();
+
+    // CONSENTIMIENTO
+    sectionTitle('8. CONSENTIMIENTO INFORMADO');
+    pdf.setFillColor(255, 248, 248);
+    pdf.setDrawColor(192, 57, 43);
+    pdf.setLineWidth(0.5);
+    const consentText = 'El paciente otorga consentimiento para la valoracion, diagnostico y tratamiento podologico. Ha sido informado del proceso, incluyendo fotografias clinicas, plan de tratamiento, riesgos y beneficios. Acepta el consentimiento informado.';
+    const consentLines = pdf.splitTextToSize(consentText, contentW - 8);
+    const consentH = consentLines.length * 4.5 + 8;
+    pdf.roundedRect(margin, y, contentW, consentH, 3, 3, 'FD');
+    pdf.setTextColor(80, 20, 30);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8.5);
+    pdf.text(consentLines, margin + 4, y + 6);
+    y += consentH + 6;
+
+    // Accepted badge
+    pdf.setFillColor(192, 57, 43);
+    pdf.roundedRect(margin, y, 60, 8, 2, 2, 'F');
+    pdf.setTextColor(255,255,255);
+    pdf.setFont('helvetica','bold');
+    pdf.setFontSize(8);
+    pdf.text('Consentimiento Aceptado', margin + 3, y + 5.5);
+    y += 14;
+    separator();
+
+    // ── FIRMAS ───────────────────────────────────────────────────────────────
+    status.textContent = 'Capturando firmas...';
+    sectionTitle('9. FIRMAS DE CONFORMIDAD');
+    checkPage(55);
+
+    const firmaW = (contentW - 8) / 2;
+    const firmaH = 35;
+    const firmaLabels = ['Firma del paciente o responsable', 'Firma del profesional tratante'];
+    const firmaIds    = ['canvas-paciente', 'canvas-profesional'];
+
+    for (let i = 0; i < 2; i++) {
+      const fx = margin + i * (firmaW + 8);
+      pdf.setTextColor(100,100,100);
+      pdf.setFont('helvetica','normal');
+      pdf.setFontSize(7.5);
+      pdf.text(st(firmaLabels[i]) + ':', fx, y);
+      pdf.setDrawColor(192, 57, 43);
+      pdf.setLineWidth(0.5);
+      pdf.roundedRect(fx, y + 3, firmaW, firmaH, 2, 2, 'S');
+      const canvas = document.getElementById(firmaIds[i]);
+      if (canvas) {
+        try {
+          const firmaData = canvas.toDataURL('image/png');
+          pdf.addImage(firmaData, 'PNG', fx + 1, y + 4, firmaW - 2, firmaH - 2);
+        } catch(e) {}
+      }
+    }
+    y += firmaH + 10;
+
+    // ── FOOTER on all pages ───────────────────────────────────────────────────
+    const totalPages = pdf.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      pdf.setPage(p);
+      pdf.setFillColor(139, 26, 47);
+      pdf.rect(0, pageH - 8, pageW, 8, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.text('PodologiAPP - Historia Clinica Podologica', margin, pageH - 3);
+      pdf.text('Pagina ' + p + ' de ' + totalPages, pageW - 28, pageH - 3);
+      if (data.pacNombre) {
+        // Strip accents for safe PDF rendering
+        const safeName = data.pacNombre.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        pdf.text('Paciente: ' + safeName, pageW/2 - 20, pageH - 3);
+      }
+    }
+
+    // ── SAVE ─────────────────────────────────────────────────────────────────
+    status.textContent = 'Guardando archivo...';
+    const filename = `HistoriaClinica_${(data.pacNombre || 'Paciente').replace(/\s+/g,'_')}_${data.espFecha || today}.pdf`;
+    pdf.save(filename);
+
+  } catch (err) {
+    console.error(err);
+    alert('Error al generar el PDF: ' + err.message);
+  } finally {
+    overlay.classList.remove('show');
+    btn.disabled = false;
+  }
+}
+
+// RESET FORM
+function reiniciarFormulario() {
+  if (!confirm('¿Está seguro de que desea reiniciar todos los campos del formulario?')) return;
+  document.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"], input[type="number"], textarea').forEach(el => el.value = '');
+  document.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(el => el.checked = false);
+  document.querySelectorAll('select').forEach(el => el.selectedIndex = 0);
+  document.getElementById('estres').value = 5;
+  document.getElementById('estres-val').textContent = '5';
+  document.getElementById('esp-fecha').value = today;
+  document.getElementById('consent-label').classList.remove('accepted');
+  limpiarFirma('canvas-paciente');
+  limpiarFirma('canvas-profesional');
+  // Reset fotos
+  ['foto1-box','foto2-box','foto3-box'].forEach(id => {
+    document.getElementById(id).innerHTML = `<input type="file" accept="image/*" onchange="previewFoto(this,'${id}')"><div class="foto-icon">🖼️</div><p>Haga clic para subir imagen</p>`;
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
