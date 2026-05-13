@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PodoClinic — Portal Pacientes</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f7f5f2;
+  --bg2: #ffffff;
+  --card: #ffffff;
+  --border: #e8e3dc;
+  --accent: #2d6a4f;
+  --accent2: #40916c;
+  --accent3: #b7e4c7;
+  --gold: #d4a017;
+  --danger: #c0392b;
+  --text: #1a1a1a;
+  --text2: #5a5a5a;
+  --text3: #9a9a9a;
+  --radius: 14px;
+  --shadow: 0 2px 16px rgba(0,0,0,0.08);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+/* ---- NAV ---- */
+nav {
+  background:var(--bg2); border-bottom:1px solid var(--border);
+  padding:0 32px; height:64px; display:flex; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:100;
+}
+.nav-logo { font-family:'Lora',serif; font-size:20px; color:var(--accent); letter-spacing:-0.3px; }
+.nav-logo span { font-size:11px; color:var(--text3); display:block; letter-spacing:2px; text-transform:uppercase; }
+.nav-links { display:flex; gap:8px; align-items:center; }
+.nav-btn {
+  padding:8px 18px; border-radius:9px; font-family:inherit; font-size:13px;
+  font-weight:600; cursor:pointer; transition:all 0.18s; border:none;
+}
+.nav-btn-ghost { background:transparent; color:var(--text2); border:1px solid var(--border); }
+.nav-btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+.nav-btn-solid { background:var(--accent); color:#fff; }
+.nav-btn-solid:hover { background:var(--accent2); transform:translateY(-1px); }
+.nav-user { display:none; align-items:center; gap:10px; font-size:14px; color:var(--text2); }
+.nav-user.visible { display:flex; }
+.nav-user-avatar {
+  width:34px; height:34px; border-radius:50%; background:var(--accent3);
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:700; color:var(--accent);
+}
+
+/* ---- PAGES ---- */
+.page { display:none; }
+.page.active { display:block; }
+
+/* ---- HERO ---- */
+.hero {
+  background: linear-gradient(160deg, #1b4332 0%, #2d6a4f 60%, #40916c 100%);
+  padding: 80px 32px 100px;
+  text-align:center;
+  position:relative;
+  overflow:hidden;
+}
+.hero::before {
+  content:''; position:absolute; top:-40%; left:-20%; width:140%; height:200%;
+  background:radial-gradient(ellipse at 60% 40%, rgba(183,228,199,0.12) 0%, transparent 60%);
+  pointer-events:none;
+}
+.hero-badge {
+  display:inline-block; background:rgba(183,228,199,0.18); border:1px solid rgba(183,228,199,0.35);
+  color:#b7e4c7; padding:5px 16px; border-radius:99px; font-size:12px; font-weight:600;
+  letter-spacing:1px; text-transform:uppercase; margin-bottom:24px;
+}
+.hero h1 {
+  font-family:'Lora',serif; font-size:52px; font-weight:600; color:#fff;
+  line-height:1.15; margin-bottom:20px; max-width:600px; margin-left:auto; margin-right:auto;
+}
+.hero p {
+  font-size:17px; color:rgba(255,255,255,0.72); max-width:460px; margin:0 auto 36px;
+  line-height:1.7;
+}
+.hero-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+.hero-btn {
+  padding:14px 32px; border-radius:11px; font-family:inherit; font-size:15px;
+  font-weight:600; cursor:pointer; transition:all 0.2s; border:none;
+}
+.hero-btn-primary { background:#fff; color:var(--accent); }
+.hero-btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.15); }
+.hero-btn-outline { background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,0.4); }
+.hero-btn-outline:hover { background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.7); }
+
+/* ---- SERVICES ---- */
+.section { padding:64px 32px; max-width:1100px; margin:0 auto; }
+.section-label {
+  font-size:11px; color:var(--accent); text-transform:uppercase; letter-spacing:2px;
+  font-weight:700; margin-bottom:10px;
+}
+.section-title { font-family:'Lora',serif; font-size:32px; font-weight:600; margin-bottom:8px; }
+.section-sub { font-size:15px; color:var(--text2); margin-bottom:40px; }
+.services-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; }
+.service-card {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:24px 20px; transition:all 0.2s; cursor:default;
+}
+.service-card:hover { transform:translateY(-3px); box-shadow:var(--shadow); border-color:var(--accent3); }
+.service-icon { font-size:28px; margin-bottom:14px; }
+.service-name { font-size:15px; font-weight:600; margin-bottom:6px; }
+.service-desc { font-size:13px; color:var(--text2); line-height:1.55; margin-bottom:14px; }
+.service-price { font-family:'Lora',serif; font-size:20px; color:var(--accent); font-weight:600; }
+
+/* ---- BOOKING ---- */
+.booking-section {
+  background: var(--bg2); border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+  padding:64px 32px;
+}
+.booking-inner { max-width:900px; margin:0 auto; }
+.booking-grid { display:grid; grid-template-columns:1fr 1fr; gap:32px; margin-top:40px; }
+.booking-col-title {
+  font-size:13px; font-weight:700; color:var(--text3); text-transform:uppercase;
+  letter-spacing:1px; margin-bottom:16px;
+}
+.calendar-wrapper { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.cal-header {
+  background:var(--accent); color:#fff; padding:14px 18px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.cal-header h3 { font-family:'Lora',serif; font-size:16px; font-weight:500; }
+.cal-nav { background:rgba(255,255,255,0.18); border:none; color:#fff; width:28px; height:28px;
+  border-radius:7px; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:background 0.15s; }
+.cal-nav:hover { background:rgba(255,255,255,0.3); }
+.cal-grid-header {
+  display:grid; grid-template-columns:repeat(7,1fr);
+  background:#f0f7f4; border-bottom:1px solid var(--border);
+}
+.cal-day-name { text-align:center; padding:8px 4px; font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); padding:8px; gap:4px; }
+.cal-day {
+  aspect-ratio:1; display:flex; align-items:center; justify-content:center;
+  border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; transition:all 0.15s;
+  border:none; background:transparent; color:var(--text);
+}
+.cal-day:hover:not(.empty):not(.past) { background:var(--accent3); color:var(--accent); }
+.cal-day.today { background:#f0f7f4; color:var(--accent); font-weight:700; }
+.cal-day.selected { background:var(--accent); color:#fff !important; }
+.cal-day.past { color:var(--text3); cursor:default; }
+.cal-day.empty { cursor:default; }
+.cal-day.has-slots { position:relative; }
+.cal-day.has-slots::after {
+  content:''; position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
+  width:4px; height:4px; border-radius:50%; background:var(--accent2);
+}
+.cal-day.selected.has-slots::after { background:#b7e4c7; }
+
+.slots-wrapper { display:flex; flex-direction:column; gap:0; }
+.slots-date-label {
+  font-size:15px; font-weight:600; color:var(--text); margin-bottom:16px;
+}
+.slots-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-height:280px; overflow-y:auto; }
+.slot-btn {
+  padding:9px 4px; border-radius:9px; font-family:inherit; font-size:13px;
+  font-weight:600; cursor:pointer; transition:all 0.15s;
+  background:#f0f7f4; border:1.5px solid transparent; color:var(--accent2);
+  text-align:center;
+}
+.slot-btn:hover { border-color:var(--accent2); }
+.slot-btn.selected { background:var(--accent); color:#fff; border-color:var(--accent); }
+.slot-btn.taken { background:#fafafa; color:var(--text3); cursor:default; text-decoration:line-through; }
+.no-slots { color:var(--text3); font-size:14px; padding:20px 0; text-align:center; }
+
+.booking-form { margin-top:28px; }
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.form-group { display:flex; flex-direction:column; gap:6px; }
+.form-group.full { grid-column:1/-1; }
+.form-group label {
+  font-size:12px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px;
+}
+.form-group input, .form-group select, .form-group textarea {
+  padding:10px 14px; border-radius:9px; border:1px solid var(--border);
+  font-family:inherit; font-size:14px; color:var(--text); background:var(--bg);
+  outline:none; transition:border-color 0.18s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  border-color:var(--accent);
+}
+.form-group select { cursor:pointer; }
+.btn-book {
+  margin-top:20px; width:100%; padding:13px; background:var(--accent); color:#fff;
+  border:none; border-radius:11px; font-family:inherit; font-size:15px; font-weight:700;
+  cursor:pointer; transition:all 0.2s;
+}
+.btn-book:hover { background:var(--accent2); transform:translateY(-1px); }
+.btn-book:disabled { background:var(--text3); cursor:not-allowed; transform:none; }
+
+/* ---- MY APPOINTMENTS ---- */
+.appointments-page { max-width:800px; margin:0 auto; padding:48px 32px; }
+.appt-card {
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+  padding:20px 24px; margin-bottom:14px; display:flex; align-items:center; gap:20px;
+  transition:box-shadow 0.2s;
+}
+.appt-card:hover { box-shadow:var(--shadow); }
+.appt-date-box {
+  background:#f0f7f4; border-radius:10px; padding:10px 14px; text-align:center;
+  min-width:70px; flex-shrink:0;
+}
+.appt-date-day { font-family:'Lora',serif; font-size:24px; font-weight:600; color:var(--accent); line-height:1; }
+.appt-date-month { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-top:2px; }
+.appt-info { flex:1; }
+.appt-treatment { font-size:15px; font-weight:600; margin-bottom:4px; }
+.appt-meta { font-size:13px; color:var(--text2); display:flex; gap:16px; }
+.appt-status {
+  padding:4px 12px; border-radius:99px; font-size:12px; font-weight:700; flex-shrink:0;
+}
+.status-confirmed { background:#e8f5e9; color:#2e7d32; }
+.status-pending { background:#fff8e1; color:#f57f17; }
+.status-cancelled { background:#ffebee; color:#c62828; }
+.appt-cancel-btn {
+  background:transparent; border:1px solid #ffd7d7; color:var(--danger); padding:6px 12px;
+  border-radius:8px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer;
+  transition:all 0.15s; flex-shrink:0;
+}
+.appt-cancel-btn:hover { background:#ffebee; }
+.empty-state {
+  text-align:center; padding:60px 20px; color:var(--text3);
+}
+.empty-state svg { width:56px; height:56px; margin:0 auto 16px; display:block; opacity:0.3; }
+.empty-state p { font-size:15px; }
+
+/* ---- AUTH MODAL ---- */
+.modal-overlay {
+  position:fixed; top:0; left:0; width:100%; height:100%; z-index:200;
+  background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center;
+  padding:20px;
+}
+.modal-overlay.open { display:flex; }
+.modal-box {
+  background:var(--bg2); border-radius:18px; padding:40px 36px; width:100%; max-width:420px;
+  box-shadow:0 24px 60px rgba(0,0,0,0.2); position:relative;
+}
+.modal-close {
+  position:absolute; top:16px; right:16px; background:transparent; border:none;
+  font-size:20px; cursor:pointer; color:var(--text3); line-height:1;
+}
+.modal-logo { font-family:'Lora',serif; font-size:22px; color:var(--accent); text-align:center; margin-bottom:4px; }
+.modal-sub { font-size:13px; color:var(--text3); text-align:center; margin-bottom:28px; }
+.auth-tabs { display:flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:24px; }
+.auth-tab {
+  flex:1; padding:10px; font-family:inherit; font-size:13px; font-weight:600;
+  cursor:pointer; border:none; background:transparent; color:var(--text2); transition:all 0.18s;
+}
+.auth-tab.active { background:var(--accent); color:#fff; }
+.auth-form { display:none; }
+.auth-form.active { display:block; }
+.modal-msg {
+  padding:10px 14px; border-radius:9px; font-size:13px; margin-bottom:14px; display:none;
+}
+.modal-msg.error { background:#ffebee; color:var(--danger); display:block; }
+.modal-msg.success { background:#e8f5e9; color:#2e7d32; display:block; }
+.modal-btn {
+  width:100%; padding:12px; background:var(--accent); color:#fff; border:none;
+  border-radius:10px; font-family:inherit; font-size:14px; font-weight:700;
+  cursor:pointer; transition:all 0.18s; margin-top:6px;
+}
+.modal-btn:hover { background:var(--accent2); }
+
+/* ---- TOAST ---- */
+.toast {
+  position:fixed; bottom:32px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:#1a1a1a; color:#fff; padding:12px 24px; border-radius:99px;
+  font-size:14px; font-weight:500; opacity:0; transition:all 0.3s; z-index:999;
+  white-space:nowrap; pointer-events:none;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ---- SUCCESS SCREEN ---- */
+.success-overlay {
+  position:fixed; top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,0.5); z-index:300; display:none;
+  align-items:center; justify-content:center; padding:20px;
+}
+.success-overlay.open { display:flex; }
+.success-box {
+  background:#fff; border-radius:18px; padding:48px 40px; max-width:420px; width:100%;
+  text-align:center; box-shadow:0 24px 60px rgba(0,0,0,0.2);
+}
+.success-icon {
+  width:72px; height:72px; background:#e8f5e9; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  margin:0 auto 20px; font-size:32px;
+}
+.success-box h2 { font-family:'Lora',serif; font-size:24px; margin-bottom:10px; color:var(--text); }
+.success-box p { font-size:14px; color:var(--text2); line-height:1.7; margin-bottom:24px; }
+.success-detail {
+  background:#f0f7f4; border-radius:12px; padding:16px 20px;
+  text-align:left; margin-bottom:24px; font-size:14px; line-height:2;
+}
+.success-detail strong { color:var(--accent); }
+.btn-success-ok {
+  background:var(--accent); color:#fff; border:none; border-radius:10px;
+  padding:12px 32px; font-family:inherit; font-size:14px; font-weight:700;
+  cursor:pointer; transition:all 0.18s;
+}
+.btn-success-ok:hover { background:var(--accent2); }
+
+/* ---- FOOTER ---- */
+footer {
+  background:#1b4332; color:rgba(255,255,255,0.6); text-align:center;
+  padding:32px; font-size:13px;
+}
+footer strong { color:#b7e4c7; }
+
+@media(max-width:700px) {
+  .hero h1 { font-size:34px; }
+  .booking-grid { grid-template-columns:1fr; }
+  .form-grid { grid-template-columns:1fr; }
+  .section { padding:48px 20px; }
+  nav { padding:0 16px; }
+  .hero { padding:60px 20px 80px; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div>
+    <div class="nav-logo">🦶 PodoClinic
+      <span>Portal Pacientes</span>
+    </div>
+  </div>
+  <div class="nav-links">
+    <div class="nav-user" id="nav-user">
+      <div class="nav-user-avatar" id="nav-avatar">?</div>
+      <span id="nav-name">Usuario</span>
+      <button class="nav-btn nav-btn-ghost" onclick="logout()">Salir</button>
+    </div>
+    <div id="nav-auth-btns">
+      <button class="nav-btn nav-btn-ghost" onclick="openModal('login')">Iniciar sesión</button>
+      <button class="nav-btn nav-btn-solid" onclick="openModal('register')">Registrarse</button>
+    </div>
+  </div>
+</nav>
+
+<!-- PAGES -->
+<!-- HOME PAGE -->
+<div class="page active" id="page-home">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">Agenda tu hora en línea</div>
+    <h1>Tu salud podológica, a un clic</h1>
+    <p>Reserva tu hora con nuestros especialistas de forma rápida, fácil y sin llamadas.</p>
+    <div class="hero-actions">
+      <button class="hero-btn hero-btn-primary" onclick="goToBooking()">Agendar hora ahora</button>
+      <button class="hero-btn hero-btn-outline" onclick="showPage('page-servicios')">Ver tratamientos</button>
+    </div>
+  </div>
+
+  <!-- Servicios destacados -->
+  <div class="section">
+    <div class="section-label">Nuestros servicios</div>
+    <div class="section-title">Tratamientos disponibles</div>
+    <div class="section-sub">Elige el tratamiento que necesitas y reserva en minutos.</div>
+    <div class="services-grid" id="services-grid-home">
+      <div style="color:var(--text3);font-size:14px;padding:20px 0;">Cargando servicios...</div>
+    </div>
+  </div>
+</div>
+
+<!-- SERVICIOS PAGE -->
+<div class="page" id="page-servicios">
+  <div class="section">
+    <div class="section-label">Catálogo completo</div>
+    <div class="section-title">Todos los tratamientos</div>
+    <div class="section-sub">Precios transparentes, sin sorpresas.</div>
+    <div class="services-grid" id="services-grid-full">
+      <div style="color:var(--text3);font-size:14px;padding:20px 0;">Cargando servicios...</div>
+    </div>
+  </div>
+</div>
+
+<!-- AGENDAR PAGE -->
+<div class="page" id="page-agendar">
+  <div class="booking-section">
+    <div class="booking-inner">
+      <div class="section-label">Reservar hora</div>
+      <div class="section-title">Agenda tu cita</div>
+      <div class="section-sub">Selecciona fecha, horario y completa tus datos.</div>
+
+      <div class="booking-grid">
+        <!-- Calendario -->
+        <div>
+          <div class="booking-col-title">1. Elige una fecha</div>
+          <div class="calendar-wrapper">
+            <div class="cal-header">
+              <button class="cal-nav" onclick="changeMonth(-1)">&#8249;</button>
+              <h3 id="cal-title">Mayo 2026</h3>
+              <button class="cal-nav" onclick="changeMonth(1)">&#8250;</button>
+            </div>
+            <div class="cal-grid-header">
+              <div class="cal-day-name">Lu</div><div class="cal-day-name">Ma</div>
+              <div class="cal-day-name">Mi</div><div class="cal-day-name">Ju</div>
+              <div class="cal-day-name">Vi</div><div class="cal-day-name">Sá</div>
+              <div class="cal-day-name">Do</div>
+            </div>
+            <div class="cal-grid" id="cal-grid"></div>
+          </div>
+
+          <!-- Horarios -->
+          <div style="margin-top:24px;">
+            <div class="booking-col-title">2. Elige un horario</div>
+            <div id="slots-container">
+              <div class="no-slots">Selecciona una fecha para ver horarios disponibles</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Formulario -->
+        <div>
+          <div class="booking-col-title">3. Tus datos y tratamiento</div>
+          <div class="booking-form">
+            <div class="form-grid">
+              <div class="form-group full">
+                <label>Tratamiento</label>
+                <select id="book-tratamiento">
+                  <option value="">Seleccionar tratamiento...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Nombre completo</label>
+                <input type="text" id="book-nombre" placeholder="Tu nombre">
+              </div>
+              <div class="form-group">
+                <label>RUT</label>
+                <input type="text" id="book-rut" placeholder="12.345.678-9">
+              </div>
+              <div class="form-group">
+                <label>Teléfono</label>
+                <input type="tel" id="book-tel" placeholder="+56 9 xxxx xxxx">
+              </div>
+              <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="book-email" placeholder="tu@correo.com">
+              </div>
+              <div class="form-group full">
+                <label>Notas adicionales (opcional)</label>
+                <textarea id="book-notas" rows="3" placeholder="Alergias, condiciones especiales..."></textarea>
+              </div>
+            </div>
+
+            <div style="margin-top:20px;padding:14px 16px;background:#f0f7f4;border-radius:10px;font-size:13px;color:var(--text2);">
+              <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Resumen de tu reserva</div>
+              <div>📅 Fecha: <strong id="summary-fecha">—</strong></div>
+              <div>🕐 Hora: <strong id="summary-hora">—</strong></div>
+              <div>💆 Tratamiento: <strong id="summary-trat">—</strong></div>
+            </div>
+
+            <button class="btn-book" id="btn-confirmar" onclick="confirmarCita()">
+              Confirmar reserva
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MIS CITAS PAGE -->
+<div class="page" id="page-citas">
+  <div class="appointments-page">
+    <div class="section-label">Mi cuenta</div>
+    <div class="section-title" style="margin-bottom:8px;">Mis citas</div>
+    <div class="section-sub" style="margin-bottom:32px;">Historial y próximas reservas</div>
+    <div id="mis-citas-list">
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <p>Inicia sesión para ver tus citas</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="modal-overlay" id="modal-auth">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeAuthModal()">&times;</button>
+    <div class="modal-logo">🦶 PodoClinic</div>
+    <div class="modal-sub">Accede a tu cuenta de paciente</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Iniciar sesión</button>
+      <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Registrarse</button>
+    </div>
+    <div class="modal-msg" id="auth-msg"></div>
+
+    <!-- Login Form -->
+    <div class="auth-form active" id="form-login">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="tu@correo.com" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Contraseña</label>
+        <input type="password" id="login-pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="modal-btn" onclick="doLogin()">Entrar</button>
+    </div>
+
+    <!-- Register Form -->
+    <div class="auth-form" id="form-register">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Nombre completo</label>
+        <input type="text" id="reg-name" placeholder="Tu nombre">
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="tu@correo.com">
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Contraseña (mín. 6 caracteres)</label>
+        <input type="password" id="reg-pwd" placeholder="••••••••">
+      </div>
+      <button class="modal-btn" onclick="doRegister()">Crear cuenta</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS OVERLAY -->
+<div class="success-overlay" id="success-overlay">
+  <div class="success-box">
+    <div class="success-icon">✅</div>
+    <h2>¡Cita reservada!</h2>
+    <p>Tu hora ha sido agendada exitosamente. Recibirás una confirmación.</p>
+    <div class="success-detail" id="success-detail"></div>
+    <button class="btn-success-ok" onclick="closeSuccess()">Ver mis citas</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- NAV BOTTOM (mobile) -->
+<div style="display:none;position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid var(--border);padding:8px 0;z-index:90;" id="bottom-nav">
+  <div style="display:flex;justify-content:space-around;">
+    <button onclick="showPage('page-home')" style="background:none;border:none;font-size:11px;color:var(--text3);cursor:pointer;padding:4px 12px;display:flex;flex-direction:column;align-items:center;gap:2px;">🏠<span>Inicio</span></button>
+    <button onclick="goToBooking()" style="background:none;border:none;font-size:11px;color:var(--accent);cursor:pointer;padding:4px 12px;display:flex;flex-direction:column;align-items:center;gap:2px;">📅<span>Agendar</span></button>
+    <button onclick="showPage('page-servicios')" style="background:none;border:none;font-size:11px;color:var(--text3);cursor:pointer;padding:4px 12px;display:flex;flex-direction:column;align-items:center;gap:2px;">💆<span>Servicios</span></button>
+    <button onclick="showPage('page-citas')" style="background:none;border:none;font-size:11px;color:var(--text3);cursor:pointer;padding:4px 12px;display:flex;flex-direction:column;align-items:center;gap:2px;">🗓️<span>Mis citas</span></button>
+  </div>
+</div>
+
+<footer>
+  <strong>PodoClinic</strong> · Sistema de Gestión Podológica · v1.0
+</footer>
+
+<script>
+const API = 'http://localhost:3001/api';
+let authToken = localStorage.getItem('patientToken');
+let currentUser = JSON.parse(localStorage.getItem('patientUser') || 'null');
+let tratamientos = [];
+let selectedDate = null;
+let selectedSlot = null;
+let calYear, calMonth;
+
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MESES_SHORT = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+// ---- INIT ----
+async function init() {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+  renderCalendar();
+  await loadTratamientos();
+  updateNavUI();
+  if (authToken && currentUser) {
+    await loadMisCitas();
+  }
+  if (window.innerWidth < 700) {
+    document.getElementById('bottom-nav').style.display = 'block';
+  }
+}
+
+// ---- NAVIGATION ----
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+  if (id === 'page-citas' && !authToken) {
+    openModal('login');
+  }
+}
+
+function goToBooking() {
+  if (!authToken) {
+    openModal('login');
+    showToast('Inicia sesión para agendar');
+    return;
+  }
+  showPage('page-agendar');
+}
+
+// ---- TRATAMIENTOS ----
+async function loadTratamientos() {
+  try {
+    const res = await fetch(`${API}/tratamientos`);
+    tratamientos = res.ok ? await res.json() : [];
+  } catch(e) {
+    tratamientos = mockTratamientos();
+  }
+  renderServicesHome();
+  renderServicesFull();
+  populateTratSelect();
+}
+
+function mockTratamientos() {
+  return [
+    {id:1,nombre:'Quiropodia básica',icono:'💅',precio:15000,descripcion:'Corte y limado de uñas, eliminación de callosidades superficiales.'},
+    {id:2,nombre:'Micosis ungueal',icono:'🦠',precio:25000,descripcion:'Tratamiento de hongos en uñas. Fresado y aplicación de antimicótico.'},
+    {id:3,nombre:'Uña encarnada',icono:'🩹',precio:30000,descripcion:'Onicocriptosis. Técnica conservadora o fenolización.'},
+    {id:4,nombre:'Plantillas ortopédicas',icono:'🦶',precio:80000,descripcion:'Plantillas personalizadas termoplásticas.'},
+    {id:5,nombre:'Pie diabético',icono:'💉',precio:35000,descripcion:'Control integral: sensitivo, vascular, cuidado de piel y uñas.'},
+    {id:6,nombre:'Electroestimulación',icono:'⚡',precio:20000,descripcion:'Terapia para dolor plantar y fascitis.'},
+  ];
+}
+
+function formatPrecio(p) {
+  return '$' + parseInt(p).toLocaleString('es-CL');
+}
+
+function renderServicesHome() {
+  const g = document.getElementById('services-grid-home');
+  g.innerHTML = tratamientos.slice(0,6).map(t => `
+    <div class="service-card">
+      <div class="service-icon">${t.icono}</div>
+      <div class="service-name">${t.nombre}</div>
+      <div class="service-desc">${t.descripcion}</div>
+      <div class="service-price">${formatPrecio(t.precio)}</div>
+    </div>
+  `).join('');
+}
+
+function renderServicesFull() {
+  const g = document.getElementById('services-grid-full');
+  g.innerHTML = tratamientos.map(t => `
+    <div class="service-card">
+      <div class="service-icon">${t.icono}</div>
+      <div class="service-name">${t.nombre}</div>
+      <div class="service-desc">${t.descripcion}</div>
+      <div class="service-price">${formatPrecio(t.precio)}</div>
+    </div>
+  `).join('');
+}
+
+function populateTratSelect() {
+  const sel = document.getElementById('book-tratamiento');
+  sel.innerHTML = '<option value="">Seleccionar tratamiento...</option>' +
+    tratamientos.map(t => `<option value="${t.nombre}">${t.icono} ${t.nombre} — ${formatPrecio(t.precio)}</option>`).join('');
+  sel.onchange = () => { document.getElementById('summary-trat').textContent = sel.value || '—'; };
+}
+
+// ---- CALENDAR ----
+function renderCalendar() {
+  document.getElementById('cal-title').textContent = `${MESES[calMonth]} ${calYear}`;
+  const grid = document.getElementById('cal-grid');
+  const today = new Date();
+  const firstDay = new Date(calYear, calMonth, 1);
+  let dayOfWeek = firstDay.getDay();
+  dayOfWeek = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  let html = '';
+  for (let i = 0; i < dayOfWeek; i++) html += `<div class="cal-day empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(calYear, calMonth, d);
+    const isToday = date.toDateString() === today.toDateString();
+    const isPast = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const isSunday = date.getDay() === 0;
+    const dateStr = formatDateStr(calYear, calMonth + 1, d);
+    const isSelected = selectedDate === dateStr;
+    let cls = 'cal-day';
+    if (isPast || isSunday) cls += ' past';
+    else cls += ' has-slots';
+    if (isToday) cls += ' today';
+    if (isSelected) cls += ' selected';
+    const click = (!isPast && !isSunday) ? `onclick="selectDate('${dateStr}')"` : '';
+    html += `<button class="${cls}" ${click}>${d}</button>`;
+  }
+  grid.innerHTML = html;
+}
+
+function changeMonth(dir) {
+  calMonth += dir;
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+}
+
+function formatDateStr(y, m, d) {
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+async function selectDate(dateStr) {
+  selectedDate = dateStr;
+  selectedSlot = null;
+  renderCalendar();
+  const d = new Date(dateStr + 'T12:00:00');
+  const label = `${d.getDate()} de ${MESES[d.getMonth()]} ${d.getFullYear()}`;
+  document.getElementById('summary-fecha').textContent = label;
+  document.getElementById('summary-hora').textContent = '—';
+  await renderSlots(dateStr);
+}
+
+async function renderSlots(dateStr) {
+  const container = document.getElementById('slots-container');
+  container.innerHTML = '<div class="no-slots">Consultando horarios...</div>';
+  
+  let takenSlots = [];
+  try {
+    if (authToken) {
+      const res = await fetch(`${API}/citas?fecha=${dateStr}`, {
+        headers: { 'Authorization': 'Bearer ' + authToken }
+      });
+      if (res.ok) {
+        const citas = await res.json();
+        takenSlots = citas.map(c => c.hora ? c.hora.slice(0,5) : '');
+      }
+    }
+  } catch(e) {}
+
+  const allSlots = generateSlots();
+  const d = new Date(dateStr + 'T12:00:00');
+  const label = `${d.getDate()} de ${MESES[d.getMonth()]}`;
+  
+  let html = `<div class="slots-date-label">${label}</div><div class="slots-grid">`;
+  allSlots.forEach(s => {
+    const taken = takenSlots.includes(s);
+    const selected = selectedSlot === s;
+    let cls = 'slot-btn';
+    if (taken) cls += ' taken';
+    if (selected) cls += ' selected';
+    const click = !taken ? `onclick="selectSlot('${s}')"` : '';
+    html += `<button class="${cls}" ${click}>${s}</button>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function generateSlots() {
+  const slots = [];
+  for (let h = 9; h < 19; h++) {
+    slots.push(`${String(h).padStart(2,'0')}:00`);
+    slots.push(`${String(h).padStart(2,'0')}:30`);
+  }
+  return slots;
+}
+
+function selectSlot(slot) {
+  selectedSlot = slot;
+  document.getElementById('summary-hora').textContent = slot;
+  renderSlots(selectedDate);
+}
+
+// ---- BOOKING ----
+async function confirmarCita() {
+  if (!authToken) { openModal('login'); return; }
+  if (!selectedDate) { showToast('⚠️ Selecciona una fecha'); return; }
+  if (!selectedSlot) { showToast('⚠️ Selecciona un horario'); return; }
+
+  const tratamiento = document.getElementById('book-tratamiento').value;
+  const nombre = document.getElementById('book-nombre').value.trim();
+  const rut = document.getElementById('book-rut').value.trim();
+  const tel = document.getElementById('book-tel').value.trim();
+  const email = document.getElementById('book-email').value.trim();
+  const notas = document.getElementById('book-notas').value.trim();
+
+  if (!nombre || !rut) { showToast('⚠️ Nombre y RUT son obligatorios'); return; }
+
+  const btn = document.getElementById('btn-confirmar');
+  btn.disabled = true;
+  btn.textContent = 'Reservando...';
+
+  try {
+    // Crear o encontrar paciente
+    let pacienteId = currentUser.paciente_id;
+    if (!pacienteId) {
+      const resPaciente = await fetch(`${API}/pacientes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+        body: JSON.stringify({ nombre, rut, email, telefono: tel, estado: 'Activo' })
+      });
+      const dataPaciente = await resPaciente.json();
+      pacienteId = dataPaciente.id;
+      if (pacienteId) {
+        currentUser.paciente_id = pacienteId;
+        localStorage.setItem('patientUser', JSON.stringify(currentUser));
+      }
+    }
+
+    if (!pacienteId) {
+      showToast('❌ No se pudo registrar el paciente');
+      btn.disabled = false; btn.textContent = 'Confirmar reserva';
+      return;
+    }
+
+    const resCita = await fetch(`${API}/citas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+      body: JSON.stringify({ paciente_id: pacienteId, fecha: selectedDate, hora: selectedSlot, tratamiento, notas, estado: 'Confirmada' })
+    });
+
+    if (resCita.ok) {
+      const d = new Date(selectedDate + 'T12:00:00');
+      document.getElementById('success-detail').innerHTML = `
+        📅 <strong>${d.getDate()} de ${MESES[d.getMonth()]} ${d.getFullYear()}</strong><br>
+        🕐 <strong>${selectedSlot} hrs</strong><br>
+        💆 <strong>${tratamiento || 'Sin tratamiento'}</strong><br>
+        👤 <strong>${nombre}</strong>
+      `;
+      document.getElementById('success-overlay').classList.add('open');
+      await loadMisCitas();
+    } else {
+      showToast('❌ Error al reservar. Intenta nuevamente.');
+    }
+  } catch(e) {
+    showToast('❌ Sin conexión al servidor');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Confirmar reserva';
+}
+
+function closeSuccess() {
+  document.getElementById('success-overlay').classList.remove('open');
+  showPage('page-citas');
+  selectedDate = null; selectedSlot = null;
+  document.getElementById('summary-fecha').textContent = '—';
+  document.getElementById('summary-hora').textContent = '—';
+  document.getElementById('summary-trat').textContent = '—';
+  renderCalendar();
+  document.getElementById('slots-container').innerHTML = '<div class="no-slots">Selecciona una fecha para ver horarios disponibles</div>';
+}
+
+// ---- MIS CITAS ----
+async function loadMisCitas() {
+  if (!authToken) return;
+  try {
+    const res = await fetch(`${API}/citas`, {
+      headers: { 'Authorization': 'Bearer ' + authToken }
+    });
+    const citas = res.ok ? await res.json() : [];
+    renderMisCitas(citas);
+  } catch(e) {
+    document.getElementById('mis-citas-list').innerHTML = '<div class="empty-state"><p>Sin conexión al servidor</p></div>';
+  }
+}
+
+function renderMisCitas(citas) {
+  const el = document.getElementById('mis-citas-list');
+  if (!citas.length) {
+    el.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      <p>No tienes citas agendadas aún</p>
+      <button onclick="goToBooking()" style="margin-top:16px;padding:10px 24px;background:var(--accent);color:white;border:none;border-radius:9px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;">Agendar mi primera hora</button>
+    </div>`;
+    return;
+  }
+  const sorted = [...citas].sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+  el.innerHTML = sorted.map(c => {
+    const d = new Date(c.fecha + 'T12:00:00');
+    const statusClass = c.estado === 'Confirmada' ? 'status-confirmed' : c.estado === 'Cancelada' ? 'status-cancelled' : 'status-pending';
+    const canCancel = c.estado !== 'Cancelada' && new Date(c.fecha) >= new Date();
+    return `
+    <div class="appt-card">
+      <div class="appt-date-box">
+        <div class="appt-date-day">${d.getDate()}</div>
+        <div class="appt-date-month">${MESES_SHORT[d.getMonth()]} ${d.getFullYear()}</div>
+      </div>
+      <div class="appt-info">
+        <div class="appt-treatment">${c.tratamiento || 'Consulta general'}</div>
+        <div class="appt-meta">
+          <span>🕐 ${c.hora ? c.hora.slice(0,5) : '—'}</span>
+          <span>👤 ${c.paciente_nombre || 'Paciente'}</span>
+        </div>
+      </div>
+      <span class="appt-status ${statusClass}">${c.estado}</span>
+      ${canCancel ? `<button class="appt-cancel-btn" onclick="cancelarCita(${c.id})">Cancelar</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function cancelarCita(id) {
+  if (!confirm('¿Estás seguro de cancelar esta cita?')) return;
+  try {
+    const res = await fetch(`${API}/citas/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+      body: JSON.stringify({ estado: 'Cancelada' })
+    });
+    if (res.ok) {
+      showToast('✅ Cita cancelada');
+      await loadMisCitas();
+    }
+  } catch(e) { showToast('❌ Error al cancelar'); }
+}
+
+// ---- AUTH ----
+function openModal(tab) {
+  document.getElementById('modal-auth').classList.add('open');
+  switchTab(tab);
+  clearAuthMsg();
+}
+function closeAuthModal() { document.getElementById('modal-auth').classList.remove('open'); }
+function switchTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('form-' + tab).classList.add('active');
+  clearAuthMsg();
+}
+function clearAuthMsg() {
+  const m = document.getElementById('auth-msg');
+  m.className = 'modal-msg'; m.textContent = '';
+}
+function showAuthMsg(msg, type) {
+  const m = document.getElementById('auth-msg');
+  m.className = 'modal-msg ' + type;
+  m.textContent = msg;
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pwd = document.getElementById('login-pwd').value;
+  if (!email || !pwd) { showAuthMsg('Completa todos los campos', 'error'); return; }
+  try {
+    const res = await fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pwd })
+    });
+    const data = await res.json();
+    if (data.success) {
+      authToken = data.token;
+      currentUser = data.user;
+      localStorage.setItem('patientToken', authToken);
+      localStorage.setItem('patientUser', JSON.stringify(currentUser));
+      updateNavUI();
+      closeAuthModal();
+      showToast('✅ ¡Bienvenido, ' + currentUser.name + '!');
+      await loadMisCitas();
+    } else {
+      showAuthMsg(data.error || 'Credenciales inválidas', 'error');
+    }
+  } catch(e) {
+    showAuthMsg('Sin conexión al servidor', 'error');
+  }
+}
+
+async function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pwd = document.getElementById('reg-pwd').value;
+  if (!name || !email || !pwd) { showAuthMsg('Completa todos los campos', 'error'); return; }
+  if (pwd.length < 6) { showAuthMsg('La contraseña debe tener al menos 6 caracteres', 'error'); return; }
+  try {
+    const res = await fetch(`${API}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password: pwd })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showAuthMsg('¡Cuenta creada! Ahora inicia sesión.', 'success');
+      setTimeout(() => { switchTab('login'); document.getElementById('login-email').value = email; }, 1500);
+    } else {
+      showAuthMsg(data.error || 'Error al registrar', 'error');
+    }
+  } catch(e) {
+    showAuthMsg('Sin conexión al servidor', 'error');
+  }
+}
+
+function logout() {
+  authToken = null; currentUser = null;
+  localStorage.removeItem('patientToken');
+  localStorage.removeItem('patientUser');
+  updateNavUI();
+  showPage('page-home');
+  showToast('Sesión cerrada');
+}
+
+function updateNavUI() {
+  const authBtns = document.getElementById('nav-auth-btns');
+  const navUser = document.getElementById('nav-user');
+  if (authToken && currentUser) {
+    authBtns.style.display = 'none';
+    navUser.classList.add('visible');
+    document.getElementById('nav-name').textContent = currentUser.name;
+    document.getElementById('nav-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
+  } else {
+    authBtns.style.display = 'flex';
+    navUser.classList.remove('visible');
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+init();
+</script>
+</body>
+</html>
