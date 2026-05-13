@@ -4,6 +4,7 @@ const mysql = require('mysql2/promise');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const fs = require('fs');          // ⬅️ AGREGADO para leer archivos SQL
 require('dotenv').config();
 
 const app = express();
@@ -433,6 +434,39 @@ app.get('/pacientes', (req, res) => {
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+// =====================================================
+// ⚠️  ENDPOINT TEMPORAL PARA IMPORTAR LA BASE DE DATOS
+// =====================================================
+// Visita https://tu-dominio.railway.app/api/setup-db una sola vez.
+// Luego elimina o comenta este bloque por seguridad.
+app.get('/api/setup-db', async (req, res) => {
+  try {
+    // Leer los archivos SQL
+    const dbSql = fs.readFileSync(path.join(__dirname, 'database.sql'), 'utf8');
+    const migrationSql = fs.readFileSync(path.join(__dirname, 'migration.sql'), 'utf8');
+
+    const conn = await pool.getConnection();
+
+    // Ejecutar cada sentencia por separado (separadas por punto y coma)
+    const executeSql = async (sqlContent) => {
+      const statements = sqlContent.split(';').filter(stmt => stmt.trim().length > 0);
+      for (let stmt of statements) {
+        await conn.execute(stmt);
+      }
+    };
+
+    await executeSql(dbSql);
+    await executeSql(migrationSql);
+
+    conn.release();
+    res.send('✅ Base de datos importada correctamente');
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('❌ Error al importar: ' + error.message);
+  }
+});
+// =====================================================
 
 // ──────────────────────────────────────────
 // START
