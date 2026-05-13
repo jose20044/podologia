@@ -3,7 +3,7 @@
  * Funciones auxiliares para interactuar con la API
  */
 
-const API_URL = '';
+const API_URL = 'https://podologia-production-0157.up.railway.app';
 
 class PodoClinicAPI {
   constructor() {
