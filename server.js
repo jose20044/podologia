@@ -246,7 +246,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     const hash     = await bcrypt.hash(password, 10);
-    const userRole = (role === 'admin') ? 'admin' : 'doctor';
+    const userRole = role === 'admin' ? 'admin' : role === 'patient' ? 'patient' : 'doctor';
 
     const [result] = await conn.execute(
       'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
@@ -258,6 +258,21 @@ app.post('/api/auth/register', async (req, res) => {
     console.error('Register error:', e.message);
     res.status(500).json({ error: 'Error interno: ' + e.message });
   }
+});
+
+// ══════════════════════════════════════════════════════════════
+// CLINIC INFO (pública - devuelve el primer médico registrado)
+// ══════════════════════════════════════════════════════════════
+app.get('/api/clinic', async (req, res) => {
+  try {
+    const conn = await pool.getConnection();
+    const [rows] = await conn.execute(
+      "SELECT id, name FROM users WHERE role='doctor' ORDER BY id LIMIT 1"
+    );
+    conn.release();
+    if (!rows.length) return res.status(404).json({ error: 'No hay médico registrado aún' });
+    res.json({ doctor_id: rows[0].id, doctor_name: rows[0].name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -285,12 +300,16 @@ app.get('/api/pacientes', verifyToken, async (req, res) => {
 
 app.post('/api/pacientes', verifyToken, async (req, res) => {
   try {
-    const { nombre, rut, edad, email, telefono, direccion, alergias, diagnostico, estado } = req.body;
+    const { nombre, rut, edad, email, telefono, direccion, alergias, diagnostico, estado, owner_user_id } = req.body;
     if (!nombre || !rut) return res.status(400).json({ error: 'Nombre y RUT son requeridos' });
+
+    // Si el creador es un paciente, el registro debe pertenecer al médico (owner_user_id)
+    // Si es médico, el registro le pertenece a él mismo
+    const targetUserId = (req.userRole === 'patient' && owner_user_id) ? owner_user_id : req.userId;
 
     const conn = await pool.getConnection();
     const [existing] = await conn.execute(
-      'SELECT id FROM pacientes WHERE rut = ? AND user_id = ?', [rut, req.userId]
+      'SELECT id FROM pacientes WHERE rut = ? AND user_id = ?', [rut, targetUserId]
     );
     if (existing.length) {
       conn.release();
@@ -299,7 +318,7 @@ app.post('/api/pacientes', verifyToken, async (req, res) => {
     const [result] = await conn.execute(
       `INSERT INTO pacientes (user_id, nombre, rut, edad, email, telefono, direccion, alergias, diagnostico, estado, fecha_registro)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [req.userId, nombre, rut, edad || 0, email || '', telefono || '', direccion || '', alergias || '', diagnostico || '', estado || 'Activo']
+      [targetUserId, nombre, rut, edad || 0, email || '', telefono || '', direccion || '', alergias || '', diagnostico || '', estado || 'Activo']
     );
     conn.release();
     res.status(201).json({ success: true, id: result.insertId, message: 'Paciente registrado' });
@@ -390,6 +409,14 @@ app.post('/api/citas', verifyToken, async (req, res) => {
     if (!paciente_id || !fecha || !hora)
       return res.status(400).json({ error: 'Paciente, fecha y hora son requeridos' });
     const conn = await pool.getConnection();
+
+    // Si el usuario es paciente, la cita debe quedar a nombre del médico (user_id del paciente en la tabla)
+    let citaUserId = req.userId;
+    if (req.userRole === 'patient') {
+      const [pac] = await conn.execute('SELECT user_id FROM pacientes WHERE id = ?', [paciente_id]);
+      if (pac.length) citaUserId = pac[0].user_id;
+    }
+
     const [c] = await conn.execute(
       "SELECT id FROM citas WHERE fecha=? AND hora=? AND estado != 'Cancelada'", [fecha, hora]
     );
@@ -397,7 +424,7 @@ app.post('/api/citas', verifyToken, async (req, res) => {
     const [r] = await conn.execute(
       `INSERT INTO citas (user_id, paciente_id, fecha, hora, duracion, tratamiento, notas, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.userId, paciente_id, fecha, hora, duracion || 30, tratamiento || '', notas || '', estado || 'Pendiente']
+      [citaUserId, paciente_id, fecha, hora, duracion || 30, tratamiento || '', notas || '', estado || 'Pendiente']
     );
     conn.release();
     res.status(201).json({ success: true, id: r.insertId });
