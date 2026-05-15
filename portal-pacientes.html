@@ -482,10 +482,16 @@ const MESES_S = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','no
 let authToken = localStorage.getItem('patientToken');
 let currentUser = JSON.parse(localStorage.getItem('patientUser') || 'null');
 let tratamientos = [], selDate = null, selSlot = null, calY, calM;
+let clinicDoctorId = null; // ID del médico al que pertenece esta clínica
 
 async function init() {
   const now = new Date(); calY = now.getFullYear(); calM = now.getMonth();
   renderCal(); await loadTratamientos(); updateNav();
+  // Cargar el ID del médico de la clínica (necesario para crear pacientes y citas)
+  try {
+    const r = await fetch(`${API}/clinic`);
+    if (r.ok) { const d = await r.json(); clinicDoctorId = d.doctor_id; }
+  } catch {}
   if (authToken) loadMisCitas();
 }
 
@@ -615,7 +621,7 @@ async function confirmarCita() {
   try {
     let pid = currentUser?.paciente_id;
     if(!pid){
-      const rp = await fetch(`${API}/pacientes`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},body:JSON.stringify({nombre,rut,email,telefono:tel,estado:'Activo'})});
+      const rp = await fetch(`${API}/pacientes`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},body:JSON.stringify({nombre,rut,email,telefono:tel,estado:'Activo',owner_user_id:clinicDoctorId})});
       const dp = await rp.json(); pid = dp.id;
       if(pid){currentUser.paciente_id=pid;localStorage.setItem('patientUser',JSON.stringify(currentUser));}
     }
@@ -708,7 +714,7 @@ async function doRegister(){
   if(!name||!email||!pwd){showMsg('Completa todos los campos','err');return;}
   if(pwd.length<6){showMsg('Mínimo 6 caracteres','err');return;}
   try{
-    const r=await fetch(`${API}/auth/register`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password:pwd})});
+    const r=await fetch(`${API}/auth/register`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password:pwd,role:'patient'})});
     const d=await r.json();
     if(d.success){showMsg('¡Cuenta creada! Ahora inicia sesión.','ok');setTimeout(()=>{switchAuth('login');document.getElementById('l-email').value=email;},1500);}
     else showMsg(d.error||'Error al registrar','err');
