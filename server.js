@@ -303,9 +303,9 @@ app.post('/api/pacientes', verifyToken, async (req, res) => {
     const { nombre, rut, edad, email, telefono, direccion, alergias, diagnostico, estado, owner_user_id } = req.body;
     if (!nombre || !rut) return res.status(400).json({ error: 'Nombre y RUT son requeridos' });
 
-    // Si el creador es un paciente, el registro debe pertenecer al médico (owner_user_id)
-    // Si es médico, el registro le pertenece a él mismo
-    const targetUserId = (req.userRole === 'patient' && owner_user_id) ? owner_user_id : req.userId;
+    // Usar owner_user_id si viene (enviado por el portal de pacientes con el ID del médico)
+    // Si no, usar el propio req.userId (médico creando desde su panel)
+    const targetUserId = owner_user_id || req.userId;
 
     const conn = await pool.getConnection();
     const [existing] = await conn.execute(
@@ -399,7 +399,12 @@ app.get('/api/citas', verifyToken, async (req, res) => {
     q += ' ORDER BY c.fecha DESC, c.hora';
     const [citas] = await conn.execute(q, params);
     conn.release();
-    res.json(citas);
+    // Normalizar fecha a string 'YYYY-MM-DD' (MySQL2 a veces devuelve Date objects)
+    const normalized = citas.map(c => ({
+      ...c,
+      fecha: c.fecha ? c.fecha.toString().slice(0, 10) : null
+    }));
+    res.json(normalized);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -410,12 +415,11 @@ app.post('/api/citas', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Paciente, fecha y hora son requeridos' });
     const conn = await pool.getConnection();
 
-    // Si el usuario es paciente, la cita debe quedar a nombre del médico (user_id del paciente en la tabla)
+    // SIEMPRE derivar el user_id del médico desde el registro del paciente.
+    // Esto funciona sin importar el rol del token (doctor, patient o sin rol).
     let citaUserId = req.userId;
-    if (req.userRole === 'patient') {
-      const [pac] = await conn.execute('SELECT user_id FROM pacientes WHERE id = ?', [paciente_id]);
-      if (pac.length) citaUserId = pac[0].user_id;
-    }
+    const [pac] = await conn.execute('SELECT user_id FROM pacientes WHERE id = ?', [paciente_id]);
+    if (pac.length && pac[0].user_id) citaUserId = pac[0].user_id;
 
     const [c] = await conn.execute(
       "SELECT id FROM citas WHERE fecha=? AND hora=? AND estado != 'Cancelada'", [fecha, hora]
