@@ -3,7 +3,7 @@
  * Funciones auxiliares para interactuar con la API
  */
 
-const API_URL = 'https://podologia-production-0157.up.railway.app';
+const API_URL = '';
 
 class PodoClinicAPI {
   constructor() {
@@ -17,7 +17,7 @@ class PodoClinicAPI {
 
   async login(email, password) {
     try {
-      const res = await fetch(`${API_URL}/api/auth/login`, {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -39,7 +39,7 @@ class PodoClinicAPI {
 
   async register(name, email, password) {
     try {
-      const res = await fetch(`${API_URL}/api/auth/register`, {
+      const res = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password })
@@ -57,7 +57,7 @@ class PodoClinicAPI {
 
   async getPacientes() {
     try {
-      const res = await fetch(`${API_URL}/api/pacientes`, {
+      const res = await fetch(`${API_URL}/pacientes`, {
         headers: { 'Authorization': `Bearer ${this.token}` }
       });
       return res.ok ? await res.json() : [];
@@ -69,7 +69,7 @@ class PodoClinicAPI {
 
   async createPaciente(datos) {
     try {
-      const res = await fetch(`${API_URL}/api/pacientes`, {
+      const res = await fetch(`${API_URL}/pacientes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -86,7 +86,7 @@ class PodoClinicAPI {
 
   async updatePaciente(id, datos) {
     try {
-      const res = await fetch(`${API_URL}/api/pacientes/${id}`, {
+      const res = await fetch(`${API_URL}/pacientes/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -102,7 +102,7 @@ class PodoClinicAPI {
 
   async deletePaciente(id) {
     try {
-      const res = await fetch(`${API_URL}/api/pacientes/${id}`, {
+      const res = await fetch(`${API_URL}/pacientes/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${this.token}` }
       });
@@ -118,7 +118,7 @@ class PodoClinicAPI {
 
   async getCitas(fecha = '') {
     try {
-      const url = fecha ? `${API_URL}/api/citas?fecha=${encodeURIComponent(fecha)}` : `${API_URL}/api/citas`;
+      const url = fecha ? `${API_URL}/citas?fecha=${encodeURIComponent(fecha)}` : `${API_URL}/citas`;
       const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${this.token}` }
       });
@@ -131,7 +131,7 @@ class PodoClinicAPI {
 
   async createCita(datos) {
     try {
-      const res = await fetch(`${API_URL}/api/citas`, {
+      const res = await fetch(`${API_URL}/citas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,7 +148,7 @@ class PodoClinicAPI {
 
   async updateCita(id, datos) {
     try {
-      const res = await fetch(`${API_URL}/api/citas/${id}`, {
+      const res = await fetch(`${API_URL}/citas/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -165,7 +165,7 @@ class PodoClinicAPI {
 
   async deleteCita(id) {
     try {
-      const res = await fetch(`${API_URL}/api/citas/${id}`, {
+      const res = await fetch(`${API_URL}/citas/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${this.token}`
@@ -184,7 +184,7 @@ class PodoClinicAPI {
 
   async getHistorial(pacienteId) {
     try {
-      const res = await fetch(`${API_URL}/api/historial/${pacienteId}`, {
+      const res = await fetch(`${API_URL}/historial/${pacienteId}`, {
         headers: { 'Authorization': `Bearer ${this.token}` }
       });
       return res.ok ? await res.json() : [];
@@ -196,7 +196,7 @@ class PodoClinicAPI {
 
   async crearEntradaHistorial(datos) {
     try {
-      const res = await fetch(`${API_URL}/api/historial`, {
+      const res = await fetch(`${API_URL}/historial`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,7 +217,7 @@ class PodoClinicAPI {
 
   async getTratamientos() {
     try {
-      const res = await fetch(`${API_URL}/api/tratamientos`);
+      const res = await fetch(`${API_URL}/tratamientos`);
       return res.ok ? await res.json() : [];
     } catch (error) {
       console.error('Error obteniendo tratamientos:', error);
