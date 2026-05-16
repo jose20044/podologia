@@ -88,6 +88,7 @@ async function initDatabase() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
         paciente_id INT NOT NULL,
+        doctor_id INT DEFAULT NULL,
         fecha DATE NOT NULL,
         hora TIME NOT NULL,
         duracion INT DEFAULT 30,
@@ -96,7 +97,8 @@ async function initDatabase() {
         estado VARCHAR(50) DEFAULT 'Pendiente',
         creada_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE
+        FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE,
+        FOREIGN KEY (doctor_id) REFERENCES users(id) ON DELETE SET NULL
       )
     `);
 
@@ -444,9 +446,9 @@ app.post('/api/citas', verifyToken, async (req, res) => {
     );
     if (c.length) { conn.release(); return res.status(409).json({ error: 'Horario ocupado. Elige otro.' }); }
     const [r] = await conn.execute(
-      `INSERT INTO citas (user_id, paciente_id, fecha, hora, duracion, tratamiento, notas, estado)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [citaUserId, paciente_id, fecha, hora, duracion || 30, tratamiento || '', notas || '', estado || 'Pendiente']
+      `INSERT INTO citas (user_id, paciente_id, doctor_id, fecha, hora, duracion, tratamiento, notas, estado)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [citaUserId, paciente_id, citaUserId, fecha, hora, duracion || 30, tratamiento || '', notas || '', estado || 'Pendiente']
     );
     conn.release();
     res.status(201).json({ success: true, id: r.insertId });
