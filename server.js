@@ -20,11 +20,13 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname)));
 
 // Pool de base de datos
+// Soporta MYSQLHOST/MYSQLUSER/... (Railway) y DB_HOST/DB_USER/... (local)
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'podologia_db',
+  host:     process.env.MYSQLHOST     || process.env.DB_HOST     || 'localhost',
+  user:     process.env.MYSQLUSER     || process.env.DB_USER     || 'root',
+  password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || '',
+  database: process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE || process.env.DB_NAME || 'podologia_db',
+  port:     parseInt(process.env.MYSQLPORT || process.env.DB_PORT || '3306'),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
