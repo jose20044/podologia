@@ -120,15 +120,15 @@ app.post('/api/auth/register', async (req, res) => {
 // RUTAS DE PACIENTES
 // ──────────────────────────────────────────
 
-// GET pacientes (doctor ve todos los suyos; paciente solo el propio)
+// GET pacientes — doctor/admin ve TODOS; paciente solo el propio
 app.get('/api/pacientes', verifyToken, async (req, res) => {
   try {
     const conn = await pool.getConnection();
     let pacientes;
     if (req.userRole === 'doctor' || req.userRole === 'admin') {
+      // Todos los médicos ven todos los pacientes de la clínica
       [pacientes] = await conn.execute(
-        'SELECT * FROM pacientes WHERE user_id = ? ORDER BY fecha_registro DESC',
-        [req.userId]
+        'SELECT * FROM pacientes ORDER BY fecha_registro DESC'
       );
     } else {
       [pacientes] = await conn.execute(
@@ -148,23 +148,20 @@ app.post('/api/pacientes', verifyToken, async (req, res) => {
     const { nombre, rut, edad, email, telefono, direccion, alergias, diagnostico, estado } = req.body;
     if (!nombre || !rut) return res.status(400).json({ error: 'Nombre y RUT son requeridos' });
 
-    // Para pacientes, el user_id owner es el médico asignado o 1 (default)
-    // Para doctors, el user_id es el propio doctor
+    const conn = await pool.getConnection();
+
+    // Owner compartido: siempre se asigna al primer doctor de la clínica
+    // para que todos los médicos vean al paciente
     let ownerId = req.userId;
     if (req.userRole === 'patient') {
-      // Asignar al primer doctor disponible o usar id propio como fallback
-      const conn2 = await pool.getConnection();
-      const [doctors] = await conn2.execute("SELECT id FROM users WHERE role = 'doctor' LIMIT 1");
-      conn2.release();
+      const [doctors] = await conn.execute("SELECT id FROM users WHERE role = 'doctor' ORDER BY id LIMIT 1");
       ownerId = doctors.length ? doctors[0].id : req.userId;
     }
 
-    const conn = await pool.getConnection();
-
-    // Verificar si el RUT ya existe para este owner
+    // Verificar si el RUT ya existe globalmente (sin importar el doctor)
     const [existing] = await conn.execute(
-      'SELECT id FROM pacientes WHERE rut = ? AND user_id = ?',
-      [rut, ownerId]
+      'SELECT id FROM pacientes WHERE rut = ?',
+      [rut]
     );
 
     let pacienteId;
@@ -193,8 +190,8 @@ app.put('/api/pacientes/:id', verifyDoctor, async (req, res) => {
     const conn = await pool.getConnection();
     await conn.execute(
       `UPDATE pacientes SET nombre=?, rut=?, edad=?, email=?, telefono=?, direccion=?, alergias=?, diagnostico=?, estado=?
-       WHERE id=? AND user_id=?`,
-      [nombre, rut, edad, email, telefono, direccion, alergias, diagnostico, estado, req.params.id, req.userId]
+       WHERE id=?`,
+      [nombre, rut, edad, email, telefono, direccion, alergias, diagnostico, estado, req.params.id]
     );
     conn.release();
     res.json({ success: true, message: 'Paciente actualizado' });
@@ -206,7 +203,7 @@ app.put('/api/pacientes/:id', verifyDoctor, async (req, res) => {
 app.delete('/api/pacientes/:id', verifyDoctor, async (req, res) => {
   try {
     const conn = await pool.getConnection();
-    await conn.execute('DELETE FROM pacientes WHERE id=? AND user_id=?', [req.params.id, req.userId]);
+    await conn.execute('DELETE FROM pacientes WHERE id=?', [req.params.id]);
     conn.release();
     res.json({ success: true, message: 'Paciente eliminado' });
   } catch (e) {
@@ -257,7 +254,7 @@ app.post('/api/historial', verifyToken, async (req, res) => {
 // RUTAS DE CITAS
 // ──────────────────────────────────────────
 
-// GET citas — doctor ve las suyas, paciente ve las propias
+// GET citas — doctor/admin ve TODAS las citas de la clínica; paciente ve las propias
 app.get('/api/citas', verifyToken, async (req, res) => {
   try {
     const { fecha } = req.query;
@@ -266,16 +263,14 @@ app.get('/api/citas', verifyToken, async (req, res) => {
     let query = `SELECT c.*, p.nombre AS paciente_nombre, p.rut AS paciente_rut, p.telefono AS paciente_telefono
                  FROM citas c
                  JOIN pacientes p ON c.paciente_id = p.id
-                 WHERE `;
+                 WHERE 1=1`;
 
-    if (req.userRole === 'doctor' || req.userRole === 'admin') {
-      query += 'c.user_id = ?';
-      params.push(req.userId);
-    } else {
-      // Paciente: ver citas donde su email o user_id coincide
-      query += 'p.email = (SELECT email FROM users WHERE id = ?)';
+    if (req.userRole === 'patient') {
+      // Paciente: ver solo sus propias citas por email
+      query += ' AND p.email = (SELECT email FROM users WHERE id = ?)';
       params.push(req.userId);
     }
+    // Doctores y admin ven todas las citas sin filtro adicional
 
     if (fecha) { query += ' AND c.fecha = ?'; params.push(fecha); }
     query += ' ORDER BY c.fecha DESC, c.hora';
@@ -294,8 +289,9 @@ app.post('/api/citas', verifyToken, async (req, res) => {
     const { paciente_id, fecha, hora, duracion, tratamiento, notas, estado } = req.body;
     if (!paciente_id || !fecha || !hora) return res.status(400).json({ error: 'Paciente, fecha y hora son requeridos' });
 
-    // Verificar que el horario no esté tomado
     const conn = await pool.getConnection();
+
+    // Verificar que el horario no esté tomado
     const [existing] = await conn.execute(
       "SELECT id FROM citas WHERE fecha = ? AND hora = ? AND estado != 'Cancelada'",
       [fecha, hora]
@@ -305,17 +301,20 @@ app.post('/api/citas', verifyToken, async (req, res) => {
       return res.status(409).json({ error: 'Ese horario ya está ocupado. Elige otro.' });
     }
 
-    // Owner: si es paciente, asignar al primer doctor disponible
+    // Owner: si es paciente, asignar al primer doctor de la clínica
+    // Si es doctor, se asigna a sí mismo
     let ownerId = req.userId;
+    let citaEstado = estado || 'Confirmada';
     if (req.userRole === 'patient') {
-      const [doctors] = await conn.execute("SELECT id FROM users WHERE role = 'doctor' LIMIT 1");
+      const [doctors] = await conn.execute("SELECT id FROM users WHERE role = 'doctor' ORDER BY id LIMIT 1");
       ownerId = doctors.length ? doctors[0].id : req.userId;
+      citaEstado = 'Pendiente'; // Citas de pacientes quedan pendientes de confirmación
     }
 
     const [result] = await conn.execute(
       `INSERT INTO citas (user_id, paciente_id, fecha, hora, duracion, tratamiento, notas, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [ownerId, paciente_id, fecha, hora, duracion || 30, tratamiento || '', notas || '', estado || 'Confirmada']
+      [ownerId, paciente_id, fecha, hora, duracion || 30, tratamiento || '', notas || '', citaEstado]
     );
     conn.release();
     res.json({ success: true, id: result.insertId, message: 'Cita creada correctamente' });
@@ -351,9 +350,9 @@ app.put('/api/citas/:id', verifyToken, async (req, res) => {
         [...values]
       );
     } else {
-      values.push(req.userId);
+      // Doctores pueden actualizar cualquier cita de la clínica
       await conn.execute(
-        `UPDATE citas SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`,
+        `UPDATE citas SET ${fields.join(', ')} WHERE id = ?`,
         values
       );
     }
@@ -368,7 +367,7 @@ app.put('/api/citas/:id', verifyToken, async (req, res) => {
 app.delete('/api/citas/:id', verifyDoctor, async (req, res) => {
   try {
     const conn = await pool.getConnection();
-    await conn.execute('DELETE FROM citas WHERE user_id = ? AND id = ?', [req.userId, req.params.id]);
+    await conn.execute('DELETE FROM citas WHERE id = ?', [req.params.id]);
     conn.release();
     res.json({ success: true, message: 'Cita eliminada' });
   } catch (e) {
@@ -395,30 +394,42 @@ app.get('/api/tratamientos', async (req, res) => {
 // RUTAS ADICIONALES PARA EL PORTAL MÉDICO
 // ──────────────────────────────────────────
 
-// Dashboard stats para el médico
+// Dashboard stats para el médico (cuenta toda la clínica)
 app.get('/api/stats', verifyDoctor, async (req, res) => {
   try {
     const conn = await pool.getConnection();
     const [[{ totalPacientes }]] = await conn.execute(
-      'SELECT COUNT(*) AS totalPacientes FROM pacientes WHERE user_id = ?', [req.userId]
+      'SELECT COUNT(*) AS totalPacientes FROM pacientes'
     );
     const [[{ totalHistorial }]] = await conn.execute(
-      `SELECT COUNT(*) AS totalHistorial FROM historial_clinico h
-       JOIN pacientes p ON h.paciente_id = p.id WHERE p.user_id = ?`, [req.userId]
+      'SELECT COUNT(*) AS totalHistorial FROM historial_clinico'
     );
     const [[{ activos }]] = await conn.execute(
-      "SELECT COUNT(*) AS activos FROM pacientes WHERE user_id = ? AND estado = 'Activo'", [req.userId]
+      "SELECT COUNT(*) AS activos FROM pacientes WHERE estado = 'Activo'"
     );
     const [[{ seguimientos }]] = await conn.execute(
-      "SELECT COUNT(*) AS seguimientos FROM pacientes WHERE user_id = ? AND estado = 'Seguimiento'", [req.userId]
+      "SELECT COUNT(*) AS seguimientos FROM pacientes WHERE estado = 'Seguimiento'"
     );
     const today = new Date().toISOString().split('T')[0];
     const [[{ citasHoy }]] = await conn.execute(
-      "SELECT COUNT(*) AS citasHoy FROM citas WHERE user_id = ? AND fecha = ? AND estado != 'Cancelada'",
-      [req.userId, today]
+      "SELECT COUNT(*) AS citasHoy FROM citas WHERE fecha = ? AND estado != 'Cancelada'",
+      [today]
     );
     conn.release();
     res.json({ totalPacientes, totalHistorial, activos, seguimientos, citasHoy });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint para que el portal de pacientes obtenga el ID del médico de la clínica
+app.get('/api/clinic', async (req, res) => {
+  try {
+    const conn = await pool.getConnection();
+    const [doctors] = await conn.execute("SELECT id, name FROM users WHERE role = 'doctor' ORDER BY id LIMIT 1");
+    conn.release();
+    if (!doctors.length) return res.status(404).json({ error: 'No hay médicos registrados' });
+    res.json({ doctorId: doctors[0].id, doctorName: doctors[0].name });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
