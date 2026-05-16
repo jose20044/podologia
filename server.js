@@ -303,11 +303,29 @@ app.post('/api/pacientes', verifyToken, async (req, res) => {
     const { nombre, rut, edad, email, telefono, direccion, alergias, diagnostico, estado, owner_user_id } = req.body;
     if (!nombre || !rut) return res.status(400).json({ error: 'Nombre y RUT son requeridos' });
 
-    // Usar owner_user_id si viene (enviado por el portal de pacientes con el ID del médico)
-    // Si no, usar el propio req.userId (médico creando desde su panel)
-    const targetUserId = owner_user_id || req.userId;
-
     const conn = await pool.getConnection();
+
+    // Determinar a qué médico pertenece este paciente.
+    // Prioridad: 1) owner_user_id enviado por el portal, 2) req.userId si es médico real,
+    // 3) el primer usuario con role='doctor' en la BD (fallback robusto).
+    let targetUserId = owner_user_id || req.userId;
+
+    // Verificar en la BD si req.userId es realmente un médico (no depende del JWT)
+    const [userCheck] = await conn.execute('SELECT role FROM users WHERE id = ?', [req.userId]);
+    const realRole = userCheck.length ? userCheck[0].role : 'unknown';
+
+    if (realRole !== 'doctor' && realRole !== 'admin') {
+      // El que está creando el paciente NO es médico → buscar el médico real en la BD
+      if (owner_user_id) {
+        targetUserId = owner_user_id;
+      } else {
+        const [docs] = await conn.execute(
+          "SELECT id FROM users WHERE role='doctor' ORDER BY id LIMIT 1"
+        );
+        targetUserId = docs.length ? docs[0].id : req.userId;
+      }
+    }
+
     const [existing] = await conn.execute(
       'SELECT id FROM pacientes WHERE rut = ? AND user_id = ?', [rut, targetUserId]
     );
