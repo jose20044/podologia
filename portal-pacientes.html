@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -663,11 +662,15 @@ function renderMisCitas(citas) {
   if(!citas.length){el.innerHTML='<div class="empty-box"><div class="ei">📅</div><p>No tienes citas agendadas aún</p><button onclick="goToBooking()">Agendar mi primera hora</button></div>';return;}
   const sorted=[...citas].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
   el.innerHTML=sorted.map(c=>{
-    const d=new Date(c.fecha+'T12:00:00');
+    // MySQL2 puede devolver DATE como objeto Date o como string 'YYYY-MM-DD'
+    const fechaStr = c.fecha ? c.fecha.toString().slice(0,10) : null;
+    const d = fechaStr ? new Date(fechaStr + 'T12:00:00') : null;
+    const diaNum = d ? d.getDate() : '—';
+    const diaMes = d ? (MESES_S[d.getMonth()] + ' ' + d.getFullYear()) : '—';
     const bc=c.estado==='Confirmada'?'bok':c.estado==='Cancelada'?'bcan':'bpend';
-    const canCancel=c.estado!=='Cancelada'&&new Date(c.fecha)>=new Date();
+    const canCancel=c.estado!=='Cancelada'&&(d?d>=new Date():false);
     return `<div class="appt-card">
-      <div class="appt-date"><div class="appt-day">${d.getDate()}</div><div class="appt-mon">${MESES_S[d.getMonth()]} ${d.getFullYear()}</div></div>
+      <div class="appt-date"><div class="appt-day">${diaNum}</div><div class="appt-mon">${diaMes}</div></div>
       <div class="appt-info">
         <div class="appt-trat">${c.tratamiento||'Consulta general'}</div>
         <div class="appt-meta"><span>🕐 ${c.hora?c.hora.slice(0,5):'—'}</span><span>👤 ${c.paciente_nombre||'Paciente'}</span></div>
