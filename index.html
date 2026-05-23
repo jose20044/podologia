@@ -419,19 +419,40 @@
 
     <!-- HISTORIAL -->
     <div class="page" id="page-historial">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
         <h2 style="font-family:'Playfair Display',serif;font-size:22px;">Historial Clínico</h2>
-        <button class="btn btn-primary" onclick="openModal('modal-historial')">+ Nueva entrada</button>
+        <button class="btn btn-primary" onclick="openModal('modal-historial')">+ Nueva entrada clínica</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 2fr;gap:20px;">
-        <div class="card">
-          <div class="card-title" style="margin-bottom:14px;">Paciente seleccionado</div>
-          <div id="paciente-info" style="text-align:center;padding:20px 0;color:var(--text3);">Selecciona un paciente</div>
+
+      <!-- Buscar paciente en historial -->
+      <div class="card" style="margin-bottom:20px;padding:16px 20px;">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <span style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap;">Ver historial de:</span>
+          <select class="input" id="historial-paciente-selector" style="flex:1;min-width:200px;max-width:360px;" onchange="seleccionarPacienteHistorial(this.value)">
+            <option value="">— Seleccionar paciente —</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="cargarPacientesParaHistorial()">↺ Actualizar</button>
         </div>
-        <div class="card">
-          <div class="card-title">Historial de consultas</div>
-          <div id="historial-timeline" style="max-height:500px;overflow-y:auto;">
-            <div style="text-align:center;color:var(--text3);padding:20px;">Selecciona un paciente para ver su historial</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:20px;">
+        <div class="card" style="padding:20px;">
+          <div class="card-title" style="margin-bottom:14px;">Ficha del paciente</div>
+          <div id="paciente-info" style="text-align:center;padding:20px 0;color:var(--text3);font-size:13px;">
+            <div style="font-size:32px;margin-bottom:8px;">👤</div>
+            Selecciona un paciente
+          </div>
+        </div>
+        <div class="card" style="padding:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div class="card-title">Consultas registradas</div>
+            <span id="historial-count" style="font-size:12px;color:var(--text3);"></span>
+          </div>
+          <div id="historial-timeline" style="max-height:560px;overflow-y:auto;">
+            <div style="text-align:center;color:var(--text3);padding:40px;font-size:13px;">
+              <div style="font-size:32px;margin-bottom:8px;">📋</div>
+              Selecciona un paciente para ver su historial
+            </div>
           </div>
         </div>
       </div>
@@ -533,33 +554,144 @@
   </div>
 </div>
 
-<!-- MODAL HISTORIAL -->
+<!-- MODAL HISTORIAL CLÍNICO PROFESIONAL -->
 <div class="modal-overlay" id="modal-historial">
-  <div class="modal">
+  <div class="modal" style="max-width:900px;max-height:90vh;overflow-y:auto;">
     <div class="modal-header">
-      <h2>📋 Nueva Entrada Clínica</h2>
+      <h2>📋 Nueva Entrada Clínica Podológica</h2>
       <button class="modal-close" onclick="closeModal('modal-historial')">×</button>
     </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group full">
-          <label>Paciente</label>
-          <select class="input" id="h-paciente"><option value="">Seleccionar paciente...</option></select>
+    <div class="modal-body" style="padding:24px 28px;">
+      
+      <!-- Paciente -->
+      <div style="margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border);">
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--text2);margin-bottom:8px;">Paciente *</label>
+        <select class="input" id="h-paciente" required>
+          <option value="">— Seleccionar paciente —</option>
+        </select>
+      </div>
+
+      <!-- Motivo de consulta -->
+      <div style="margin-bottom:24px;">
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--text2);margin-bottom:8px;">Motivo de consulta *</label>
+        <textarea class="input" id="h-motivo" rows="2" placeholder="¿Por qué consulta el paciente hoy?"></textarea>
+      </div>
+
+      <!-- Antecedentes y condiciones -->
+      <div style="margin-bottom:24px;">
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--text2);margin-bottom:8px;">Antecedentes relevantes</label>
+        <textarea class="input" id="h-antecedentes" rows="2" placeholder="Diabetes, problemas circulatorios, alergias, tratamientos actuales..."></textarea>
+      </div>
+
+      <!-- Exploración clínica -->
+      <div style="margin-bottom:24px;padding:18px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);">
+        <h3 style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:14px;">🔍 Exploración Clínica</h3>
+        
+        <div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label style="font-size:12px;color:var(--text2);margin-bottom:6px;display:block;">Estado de uñas</label>
+            <select class="input" id="h-unas">
+              <option value="">Seleccionar...</option>
+              <option>Normal</option>
+              <option>Onicomicosis</option>
+              <option>Onicogrifosis</option>
+              <option>Uña encarnada</option>
+              <option>Otro</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);margin-bottom:6px;display:block;">Estado de piel</label>
+            <select class="input" id="h-piel">
+              <option value="">Seleccionar...</option>
+              <option>Normal</option>
+              <option>Hiperqueratosis</option>
+              <option>Helomas (callos)</option>
+              <option>Pie de atleta</option>
+              <option>Sequedad/Grietas</option>
+              <option>Otro</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);margin-bottom:6px;display:block;">Marcha y postura</label>
+            <select class="input" id="h-marcha">
+              <option value="">Seleccionar...</option>
+              <option>Normal</option>
+              <option>Alterada</option>
+              <option>Pie plano</option>
+              <option>Pie cavo</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);margin-bottom:6px;display:block;">Pulsos pedios</label>
+            <select class="input" id="h-pulsos">
+              <option value="">Seleccionar...</option>
+              <option>Presentes y simétricos</option>
+              <option>Disminuidos</option>
+              <option>Ausentes</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Tratamiento realizado</label>
-          <select class="input" id="h-tratamiento"><option value="">Seleccionar...</option></select>
-        </div>
-        <div class="form-group"><label>Próxima cita</label><input class="input" id="h-proxima-cita" type="date"></div>
-        <div class="form-group full">
-          <label>Diagnóstico / Observaciones</label>
-          <textarea class="input" id="h-diagnostico" rows="3" placeholder="Describe el procedimiento, hallazgos y recomendaciones..."></textarea>
+
+        <div style="margin-top:14px;">
+          <label style="font-size:12px;color:var(--text2);margin-bottom:6px;display:block;">Observaciones adicionales</label>
+          <textarea class="input" id="h-obs-exploracion" rows="2" placeholder="Hallazgos adicionales..."></textarea>
         </div>
       </div>
-      <div class="form-actions">
-        <button class="btn btn-outline" onclick="closeModal('modal-historial')">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveHistorial()">Guardar entrada</button>
+
+      <!-- Diagnóstico -->
+      <div style="margin-bottom:24px;">
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--text2);margin-bottom:8px;">Diagnóstico *</label>
+        <textarea class="input" id="h-diagnostico" rows="3" placeholder="Diagnóstico principal y hallazgos..."></textarea>
       </div>
+
+      <!-- Tratamiento realizado -->
+      <div style="margin-bottom:24px;padding:18px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);">
+        <h3 style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:14px;">💊 Tratamiento Realizado</h3>
+        
+        <div style="margin-bottom:14px;">
+          <label style="font-size:12px;color:var(--text2);margin-bottom:6px;display:block;">Tipo de tratamiento</label>
+          <select class="input" id="h-tratamiento">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="font-size:12px;color:var(--text2);margin-bottom:6px;display:block;">Procedimientos realizados</label>
+          <textarea class="input" id="h-procedimientos" rows="2" placeholder="Corte de uñas, eliminación de callosidades, aplicación de antimicóticos..."></textarea>
+        </div>
+      </div>
+
+      <!-- Recomendaciones e indicaciones -->
+      <div style="margin-bottom:24px;">
+        <label style="display:block;font-size:13px;font-weight:700;color:var(--text2);margin-bottom:8px;">Recomendaciones e indicaciones para el paciente</label>
+        <textarea class="input" id="h-recomendaciones" rows="3" placeholder="Higiene del pie, cuidados en casa, calzado recomendado, uso de cremas..."></textarea>
+      </div>
+
+      <!-- Próxima cita y seguimiento -->
+      <div class="form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;">
+        <div>
+          <label style="font-size:12px;color:var(--text2);margin-bottom:6px;display:block;">Próxima cita sugerida</label>
+          <input class="input" id="h-proxima-cita" type="date">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text2);margin-bottom:6px;display:block;">Frecuencia de seguimiento</label>
+          <select class="input" id="h-seguimiento">
+            <option value="">No requiere</option>
+            <option value="1-semana">1 semana</option>
+            <option value="2-semanas">2 semanas</option>
+            <option value="1-mes">1 mes</option>
+            <option value="2-meses">2 meses</option>
+            <option value="3-meses">3 meses</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="form-actions" style="display:flex;gap:12px;padding-top:20px;border-top:1px solid var(--border);">
+        <button class="btn btn-outline" onclick="closeModal('modal-historial')" style="flex:1;">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveHistorialProfesional()" style="flex:2;">💾 Guardar entrada clínica</button>
+      </div>
+
     </div>
   </div>
 </div>
@@ -706,6 +838,7 @@
   function actualizarSelectsPacientes() {
     const opts = '<option value="">Seleccionar paciente...</option>'+pacientes.map(p=>`<option value="${p.id}">${p.nombre} (${p.rut||'S/RUT'})</option>`).join('');
     ['h-paciente','c-paciente'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=opts; });
+    cargarPacientesParaHistorial();
   }
 
   async function verPaciente(id) {
@@ -734,17 +867,31 @@
 
   function renderHistorial(hist) {
     const el = document.getElementById('historial-timeline');
-    if (!hist.length) { el.innerHTML='<div style="text-align:center;color:var(--text3);padding:20px;">Sin consultas registradas</div>'; return; }
-    el.innerHTML = '<div class="timeline">'+hist.map(h=>`
+    const countEl = document.getElementById('historial-count');
+    
+    if (!hist.length) { 
+      el.innerHTML='<div style="text-align:center;color:var(--text3);padding:40px;font-size:13px;"><div style="font-size:32px;margin-bottom:8px;">📋</div>Sin consultas registradas para este paciente</div>'; 
+      if (countEl) countEl.textContent = '';
+      return; 
+    }
+
+    if (countEl) countEl.textContent = `${hist.length} ${hist.length === 1 ? 'entrada' : 'entradas'}`;
+
+    el.innerHTML = '<div class="timeline">'+hist.map(h=>{
+      const obs = h.observaciones || h.diagnostico || '—';
+      const obsFormatted = obs.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+      return `
       <div class="timeline-item">
         <div class="timeline-dot"></div>
         <div class="timeline-date">${new Date(h.fecha).toLocaleDateString('es-CL',{weekday:'short',year:'numeric',month:'long',day:'numeric'})}</div>
         <div class="timeline-card">
-          <h4>${h.tratamiento||'Consulta'}</h4>
-          <p>${h.observaciones||h.diagnostico||'—'}</p>
-          ${h.proxima_cita?`<div style="margin-top:8px;"><span class="badge badge-yellow">Próxima cita: ${new Date(h.proxima_cita).toLocaleDateString('es-CL')}</span></div>`:''}
+          <h4 style="margin-bottom:8px;font-size:14px;color:var(--accent);">${h.tratamiento||'Consulta podológica'}</h4>
+          ${h.diagnostico && h.diagnostico !== obs ? `<div style="margin-bottom:8px;font-weight:600;font-size:13px;">Diagnóstico: ${h.diagnostico}</div>` : ''}
+          <div style="font-size:13px;line-height:1.7;color:var(--text2);white-space:pre-wrap;">${obsFormatted}</div>
+          ${h.proxima_cita?`<div style="margin-top:12px;"><span class="badge badge-yellow">📅 Próxima cita: ${new Date(h.proxima_cita).toLocaleDateString('es-CL')}</span></div>`:''}
         </div>
-      </div>`).join('')+'</div>';
+      </div>`;
+    }).join('')+'</div>';
   }
 
   async function savePaciente() {
@@ -766,24 +913,101 @@
     } catch(e) { showToast('❌ '+e.message,'error'); }
   }
 
-  async function saveHistorial() {
+  async function saveHistorialProfesional() {
     const pacienteId = parseInt(document.getElementById('h-paciente').value);
-    const tratamientoId = parseInt(document.getElementById('h-tratamiento').value);
-    const diagnostico = document.getElementById('h-diagnostico').value.trim();
-    const proximaCita = document.getElementById('h-proxima-cita').value;
     if (!pacienteId) { showToast('⚠️ Selecciona un paciente','error'); return; }
+    
+    const motivo = document.getElementById('h-motivo').value.trim();
+    const antecedentes = document.getElementById('h-antecedentes').value.trim();
+    const unas = document.getElementById('h-unas').value;
+    const piel = document.getElementById('h-piel').value;
+    const marcha = document.getElementById('h-marcha').value;
+    const pulsos = document.getElementById('h-pulsos').value;
+    const obsExploracion = document.getElementById('h-obs-exploracion').value.trim();
+    const diagnostico = document.getElementById('h-diagnostico').value.trim();
+    const tratamientoId = parseInt(document.getElementById('h-tratamiento').value);
+    const procedimientos = document.getElementById('h-procedimientos').value.trim();
+    const recomendaciones = document.getElementById('h-recomendaciones').value.trim();
+    const proximaCita = document.getElementById('h-proxima-cita').value;
+    const seguimiento = document.getElementById('h-seguimiento').value;
+
+    if (!diagnostico) { showToast('⚠️ El diagnóstico es obligatorio','error'); return; }
+
     const trat = tratamientos.find(t=>t.id===tratamientoId);
+    
+    // Build comprehensive observation text
+    const observacionesCompletas = [
+      motivo ? `**Motivo:** ${motivo}` : '',
+      antecedentes ? `**Antecedentes:** ${antecedentes}` : '',
+      (unas || piel || marcha || pulsos || obsExploracion) ? `**Exploración:** Uñas: ${unas||'—'}, Piel: ${piel||'—'}, Marcha: ${marcha||'—'}, Pulsos: ${pulsos||'—'}${obsExploracion ? '. '+obsExploracion : ''}` : '',
+      procedimientos ? `**Procedimientos:** ${procedimientos}` : '',
+      recomendaciones ? `**Recomendaciones:** ${recomendaciones}` : '',
+      seguimiento ? `**Seguimiento:** ${seguimiento}` : ''
+    ].filter(Boolean).join('\n\n');
+
     try {
-      const res = await fetch(API_URL+'/historial', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
-        body: JSON.stringify({ paciente_id:pacienteId, tratamiento:trat?.nombre||'', diagnostico, observaciones:diagnostico, proxima_cita:proximaCita||null }) });
+      const res = await fetch(API_URL+'/historial', { 
+        method:'POST', 
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
+        body: JSON.stringify({ 
+          paciente_id: pacienteId, 
+          tratamiento: trat?.nombre || 'Consulta podológica', 
+          diagnostico: diagnostico, 
+          observaciones: observacionesCompletas,
+          proxima_cita: proximaCita || null 
+        }) 
+      });
+      
       if (res.ok) {
-        showToast('✅ Entrada guardada');
+        showToast('✅ Entrada clínica guardada correctamente');
         closeModal('modal-historial');
-        document.getElementById('h-diagnostico').value=''; document.getElementById('h-proxima-cita').value=''; document.getElementById('h-tratamiento').value='';
+        limpiarFormularioHistorial();
         if (pacienteSeleccionado) await cargarHistorial(pacienteSeleccionado.id);
         agregarNotificacion('📋','Nueva entrada clínica',`Historial actualizado para ${pacientes.find(p=>p.id===pacienteId)?.nombre||'paciente'}.`,'badge-blue');
-      } else showToast('❌ Error al guardar','error');
-    } catch(e) { showToast('❌ '+e.message,'error'); }
+      } else {
+        const data = await res.json();
+        showToast('❌ '+(data.error||'Error al guardar'),'error');
+      }
+    } catch(e) { 
+      console.error(e);
+      showToast('❌ '+e.message,'error'); 
+    }
+  }
+
+  function limpiarFormularioHistorial() {
+    ['h-motivo','h-antecedentes','h-obs-exploracion','h-diagnostico','h-procedimientos','h-recomendaciones','h-proxima-cita'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    ['h-paciente','h-unas','h-piel','h-marcha','h-pulsos','h-tratamiento','h-seguimiento'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.tagName === 'SELECT') el.selectedIndex = 0;
+    });
+  }
+
+  function cargarPacientesParaHistorial() {
+    const selector = document.getElementById('historial-paciente-selector');
+    if (!selector) return;
+    const currentVal = selector.value;
+    selector.innerHTML = '<option value="">— Seleccionar paciente —</option>' + 
+      pacientes.map(p => `<option value="${p.id}">${p.nombre} (${p.rut||'S/RUT'})</option>`).join('');
+    if (currentVal) selector.value = currentVal;
+  }
+
+  async function seleccionarPacienteHistorial(id) {
+    if (!id) {
+      document.getElementById('paciente-info').innerHTML = `<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:13px;"><div style="font-size:32px;margin-bottom:8px;">👤</div>Selecciona un paciente</div>`;
+      document.getElementById('historial-timeline').innerHTML = `<div style="text-align:center;color:var(--text3);padding:40px;font-size:13px;"><div style="font-size:32px;margin-bottom:8px;">📋</div>Selecciona un paciente para ver su historial</div>`;
+      document.getElementById('historial-count').textContent = '';
+      pacienteSeleccionado = null;
+      return;
+    }
+    await verPaciente(parseInt(id));
+  }
+
+  async function saveHistorial() {
+    // Legacy function - redirect to new one
+    await saveHistorialProfesional();
   }
 
   // ========== TRATAMIENTOS ==========
