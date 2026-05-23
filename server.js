@@ -8,7 +8,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'tu_secreto_seguro_aqui_2026';
+const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
 
 // Middleware
 app.use(cors());
@@ -30,6 +30,124 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
+});
+
+// ──────────────────────────────────────────
+// AUTO-INICIALIZACIÓN DE BASE DE DATOS
+// ──────────────────────────────────────────
+async function initDatabase() {
+  try {
+    const conn = await pool.getConnection();
+    console.log('✅ Conectado a MySQL');
+
+    // Crear tablas una por una
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role VARCHAR(20) DEFAULT 'doctor',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS pacientes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        nombre VARCHAR(150) NOT NULL,
+        rut VARCHAR(20) NOT NULL,
+        edad INT DEFAULT 0,
+        email VARCHAR(100) DEFAULT '',
+        telefono VARCHAR(20) DEFAULT '',
+        direccion VARCHAR(200) DEFAULT '',
+        alergias VARCHAR(200) DEFAULT '',
+        diagnostico VARCHAR(500) DEFAULT '',
+        estado VARCHAR(50) DEFAULT 'Activo',
+        fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS historial_clinico (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        paciente_id INT NOT NULL,
+        tratamiento VARCHAR(150) DEFAULT '',
+        diagnostico VARCHAR(500) DEFAULT '',
+        observaciones LONGTEXT,
+        proxima_cita DATE DEFAULT NULL,
+        fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS citas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        paciente_id INT NOT NULL,
+        fecha DATE NOT NULL,
+        hora TIME NOT NULL,
+        duracion INT DEFAULT 30,
+        tratamiento VARCHAR(150) DEFAULT '',
+        notas LONGTEXT,
+        estado VARCHAR(50) DEFAULT 'Pendiente',
+        creada_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (paciente_id) REFERENCES pacientes(id) ON DELETE CASCADE
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS tratamientos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL,
+        icono VARCHAR(10) DEFAULT '💅',
+        precio DECIMAL(10,2) NOT NULL DEFAULT 0,
+        descripcion VARCHAR(500) DEFAULT '',
+        activo BOOLEAN DEFAULT TRUE
+      )
+    `);
+
+    // Poblar tratamientos solo si están vacíos
+    const [[{ cnt }]] = await conn.execute('SELECT COUNT(*) AS cnt FROM tratamientos');
+    if (cnt === 0) {
+      const trats = [
+        ['Quiropodia basica',     '💅', 15000, 'Corte y limado de unas, eliminacion de callosidades superficiales, hidratacion plantar.'],
+        ['Micosis ungueal',       '🦠', 25000, 'Tratamiento de hongos en unas. Fresado, aplicacion de antimico tópico.'],
+        ['Una encarnada',         '🩹', 30000, 'Onicocriptosis. Tecnica conservadora o fenolizacion segun grado.'],
+        ['Plantillas ortopedicas','🦶', 80000, 'Plantillas personalizadas termoplasticas. Incluye molde y 1 ajuste.'],
+        ['Pie diabetico',         '💉', 35000, 'Control integral: sensitivo, vascular, cuidado de piel y unas.'],
+        ['Electroestimulacion',   '⚡', 20000, 'Terapia con corrientes para dolor plantar y fascitis plantar.'],
+        ['Verruga plantar',       '🔬', 28000, 'Crioterapia o tratamiento quimico con acido salicilico.'],
+        ['Estudio biomecanico',   '🏃', 50000, 'Analisis de marcha y pisada, huella plantar digital.'],
+        ['Quiropodia premium',    '🌿', 25000, 'Quiropodia completa + exfoliacion, masaje, parafina y estetica.']
+      ];
+      for (const [nombre, icono, precio, descripcion] of trats) {
+        await conn.execute(
+          'INSERT INTO tratamientos (nombre, icono, precio, descripcion) VALUES (?, ?, ?, ?)',
+          [nombre, icono, precio, descripcion]
+        );
+      }
+      console.log('✅ Tratamientos insertados');
+    }
+
+    conn.release();
+    console.log('✅ Base de datos lista');
+  } catch (err) {
+    console.error('❌ Error BD:', err.message);
+  }
+}
+
+initDatabase();
+
+// ──────────────────────────────────────────
+// HEALTH CHECK
+// ──────────────────────────────────────────
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', ts: new Date().toISOString() });
 });
 
 // ──────────────────────────────────────────
@@ -74,9 +192,10 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
+    if (password.length < 6) return res.status(400).json({ error: 'Contraseña inválida' });
 
     const conn = await pool.getConnection();
-    const [users] = await conn.execute('SELECT * FROM users WHERE email = ?', [email]);
+    const [users] = await conn.execute('SELECT * FROM users WHERE email = ?', [email.toLowerCase().trim()]);
     conn.release();
 
     if (!users.length) return res.status(401).json({ error: 'Email o contraseña inválidos' });
@@ -99,9 +218,10 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'Todos los campos son requeridos' });
+    if (password.length < 6) return res.status(400).json({ error: 'Contraseña mínimo 6 caracteres' });
 
     const conn = await pool.getConnection();
-    const [existing] = await conn.execute('SELECT id FROM users WHERE email = ?', [email]);
+    const [existing] = await conn.execute('SELECT id FROM users WHERE email = ?', [email.toLowerCase().trim()]);
     if (existing.length) { conn.release(); return res.status(400).json({ error: 'El email ya está registrado' }); }
 
     const hash = await bcrypt.hash(password, 10);
@@ -109,7 +229,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     await conn.execute(
       'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-      [name, email, hash, userRole]
+      [name.trim(), email.toLowerCase().trim(), hash, userRole]
     );
     conn.release();
     res.json({ success: true, message: 'Usuario registrado correctamente' });
