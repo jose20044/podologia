@@ -1,0 +1,19 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "node server.js"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[[services]]
+name = "app"
+
+[services.variables]
+PORT = "3001"
+MYSQLHOST = "${{MySQL.MYSQLHOST}}"
+MYSQLUSER = "${{MySQL.MYSQLUSER}}"
+MYSQLPASSWORD = "${{MySQL.MYSQLPASSWORD}}"
+MYSQLDATABASE = "${{MySQL.MYSQLDATABASE}}"
+MYSQLPORT = "${{MySQL.MYSQLPORT}}"
+# JWT_SECRET debe configurarse manualmente en Railway → Variables (nunca en GitHub)
