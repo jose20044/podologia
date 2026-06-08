@@ -158,6 +158,10 @@
   .cal-day.selected { background:var(--accent); color:#0e1117; font-weight:700; }
   .cal-day.today { border-color:var(--accent); color:var(--accent); font-weight:600; }
   .cal-day.disabled { color:var(--text3); cursor:default; }
+  .cal-day.past { color:var(--text3); }
+  .cal-day.past:hover { background:var(--bg3); border-color:var(--text3); color:var(--text); }
+  .cal-day.past.selected { background:var(--text3); color:var(--bg); font-weight:700; }
+  .cal-day.past.has-citas::after { background:var(--text3); }
   .cal-day.other-month { color:var(--text3); opacity:.4; cursor:default; }
   .cal-day.has-citas { position:relative; }
   .cal-day.has-citas::after { content:''; position:absolute; bottom:3px; left:50%; transform:translateX(-50%); width:4px; height:4px; background:var(--accent); border-radius:50%; }
@@ -1116,12 +1120,31 @@
     fechaAgendaSeleccionada = fecha;
     const meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     const [y,m,d] = fecha.split('-');
-    document.getElementById('agenda-fecha-titulo').textContent = `${parseInt(d)} de ${meses[parseInt(m)-1]} de ${y}`;
+    const hoyStr = new Date().toISOString().split('T')[0];
+    const esPasado = fecha < hoyStr;
+    const esHoy = fecha === hoyStr;
+    const sufijo = esHoy ? ' — Hoy' : esPasado ? ' <span style="font-size:11px;background:rgba(138,149,168,0.15);color:var(--text3);padding:2px 8px;border-radius:20px;font-weight:500;">Registro retroactivo</span>' : '';
+    document.getElementById('agenda-fecha-titulo').innerHTML = `${parseInt(d)} de ${meses[parseInt(m)-1]} de ${y}${sufijo}`;
     let citasDelDia = citas.filter(c=>(c.fecha?.split('T')[0]||c.fecha)===fecha);
     if (filtroEstadoCita) citasDelDia = citasDelDia.filter(c=>c.estado===filtroEstadoCita);
     citasDelDia.sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+    // Botón para agregar entrada clínica retroactiva en días pasados
+    const hoyStr3 = new Date().toISOString().split('T')[0];
+    if (fecha <= hoyStr3 && fecha !== hoyStr3) {
+      const btnRetro = document.createElement('div');
+      btnRetro.style.cssText = 'margin-bottom:12px;';
+      btnRetro.innerHTML = `<button class="btn btn-outline" style="width:100%;font-size:13px;border-style:dashed;" onclick="openModal('modal-historial')">📋 Agregar entrada clínica para este día</button>`;
+      el.appendChild(btnRetro);
+    }
     const el = document.getElementById('agenda-citas-list');
-    if (!citasDelDia.length) { el.innerHTML='<div style="text-align:center;color:var(--text3);padding:32px;">Sin citas para este día</div>'; return; }
+    if (!citasDelDia.length) {
+      const hoyStr2 = new Date().toISOString().split('T')[0];
+      const msgExtra = fecha < hoyStr2
+        ? '<div style="margin-top:10px;font-size:12px;color:var(--accent);opacity:.7;">Puedes registrar una entrada clínica retroactiva desde <b>Historial Clínico → Nueva entrada</b>.</div>'
+        : '';
+      el.innerHTML = `<div style="text-align:center;color:var(--text3);padding:32px;">Sin citas para este día${msgExtra}</div>`;
+      return;
+    }
     el.innerHTML = citasDelDia.map(c=>`
       <div class="cita-list-item">
         <div class="cita-hora">${c.hora?.substring(0,5)||'--:--'}</div>
@@ -1155,14 +1178,15 @@
       const fechaObj=new Date(calYear,calMonth,d);
       const div=document.createElement('div');
       div.textContent=d; div.className='cal-day';
-      if(fechaObj<hoy) div.classList.add('disabled');
-      else {
-        if(fechaStr===new Date().toISOString().split('T')[0]) div.classList.add('today');
-        if(fechaStr===fechaAgendaSeleccionada) div.classList.add('selected');
-        const tieneCitas=citas.some(c=>(c.fecha?.split('T')[0]||c.fecha)===fechaStr && c.estado!=='Cancelada');
-        if(tieneCitas) div.classList.add('has-citas');
-        div.onclick=()=>{fechaAgendaSeleccionada=fechaStr;renderCalendario();cargarCitasDelDia(fechaStr);};
-      }
+      // Todos los días son seleccionables (pasados, hoy y futuros)
+      // Los días pasados permiten registrar entradas clínicas retroactivas
+      const hoyStr = new Date().toISOString().split('T')[0];
+      if(fechaStr < hoyStr) div.classList.add('past');
+      if(fechaStr===hoyStr) div.classList.add('today');
+      if(fechaStr===fechaAgendaSeleccionada) div.classList.add('selected');
+      const tieneCitas=citas.some(c=>(c.fecha?.split('T')[0]||c.fecha)===fechaStr && c.estado!=='Cancelada');
+      if(tieneCitas) div.classList.add('has-citas');
+      div.onclick=()=>{fechaAgendaSeleccionada=fechaStr;renderCalendario();cargarCitasDelDia(fechaStr);};
       grid.appendChild(div);
     }
   }
@@ -1244,7 +1268,19 @@
   }
 
   // ========== MODAL ==========
-  function openModal(id){document.getElementById(id).classList.add('open');}
+  function openModal(id){
+    document.getElementById(id).classList.add('open');
+    // Si se abre el modal de historial, pre-rellenar fecha de próxima cita con el día seleccionado (si es pasado o hoy)
+    if (id === 'modal-historial') {
+      const hoyStr = new Date().toISOString().split('T')[0];
+      const proxCitaInput = document.getElementById('h-proxima-cita');
+      // Pre-seleccionar paciente si hay uno seleccionado
+      if (pacienteSeleccionado) {
+        const sel = document.getElementById('h-paciente');
+        if (sel) sel.value = pacienteSeleccionado.id;
+      }
+    }
+  }
   function closeModal(id){document.getElementById(id).classList.remove('open');}
   document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
   document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'));});
