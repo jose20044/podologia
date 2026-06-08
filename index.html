@@ -536,10 +536,11 @@
 <div class="modal-overlay" id="modal-paciente">
   <div class="modal">
     <div class="modal-header">
-      <h2>👤 Nuevo Paciente</h2>
-      <button class="modal-close" onclick="closeModal('modal-paciente')">×</button>
+      <h2 id="modal-paciente-titulo">👤 Nuevo Paciente</h2>
+      <button class="modal-close" onclick="closeModal('modal-paciente');document.getElementById('p-edit-id').value='';document.getElementById('modal-paciente-titulo').textContent='👤 Nuevo Paciente';document.getElementById('btn-guardar-paciente').textContent='Registrar paciente';">×</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="p-edit-id" value="">
       <div class="form-grid">
         <div class="form-group"><label>Nombre *</label><input class="input" id="p-nombre" type="text" placeholder="Nombre completo"></div>
         <div class="form-group"><label>RUT *</label><input class="input" id="p-rut" type="text" placeholder="12.345.678-9"></div>
@@ -552,7 +553,7 @@
       </div>
       <div class="form-actions">
         <button class="btn btn-outline" onclick="closeModal('modal-paciente')">Cancelar</button>
-        <button class="btn btn-primary" onclick="savePaciente()">Registrar paciente</button>
+        <button class="btn btn-primary" id="btn-guardar-paciente" onclick="savePaciente()">Registrar paciente</button>
       </div>
     </div>
   </div>
@@ -818,14 +819,20 @@
     const grid = document.getElementById('patient-grid');
     if (!lista.length) { grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3);">👥 Sin pacientes. Agrega el primero.</div>'; return; }
     grid.innerHTML = lista.map((p,i) => `
-      <div class="patient-card" onclick="verPaciente(${p.id})">
-        <div class="patient-avatar" style="background:${colores[i%colores.length]};">${p.nombre.split(' ').map(x=>x[0]).join('').slice(0,2)}</div>
-        <div class="patient-name">${p.nombre}</div>
-        <div class="patient-meta">${p.edad||'N/A'} años · ${p.rut||'S/RUT'}</div>
-        <div class="patient-meta">📱 ${p.telefono||'N/A'}</div>
-        <div class="patient-tags">
-          ${p.alergias?`<span class="badge badge-red">${p.alergias.substring(0,18)}...</span>`:''}
-          <span class="badge ${p.estado==='Activo'?'badge-green':p.estado==='Seguimiento'?'badge-yellow':'badge-gray'}">${p.estado}</span>
+      <div class="patient-card" style="position:relative;">
+        <div style="position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:2;">
+          <button onclick="event.stopPropagation();editarPaciente(${p.id})" style="background:rgba(255,255,255,0.08);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;" title="Editar paciente">⚙️</button>
+          <button onclick="event.stopPropagation();eliminarPaciente(${p.id},'${p.nombre.replace(/'/g, "\'")}')" style="background:rgba(255,80,80,0.12);border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;" title="Eliminar paciente">✕</button>
+        </div>
+        <div onclick="verPaciente(${p.id})" style="cursor:pointer;">
+          <div class="patient-avatar" style="background:${colores[i%colores.length]};">${p.nombre.split(' ').map(x=>x[0]).join('').slice(0,2)}</div>
+          <div class="patient-name">${p.nombre}</div>
+          <div class="patient-meta">${p.edad||'N/A'} años · ${p.rut||'S/RUT'}</div>
+          <div class="patient-meta">📱 ${p.telefono||'N/A'}</div>
+          <div class="patient-tags">
+            ${p.alergias?`<span class="badge badge-red">${p.alergias.substring(0,18)}...</span>`:''}
+            <span class="badge ${p.estado==='Activo'?'badge-green':p.estado==='Seguimiento'?'badge-yellow':'badge-gray'}">${p.estado}</span>
+          </div>
         </div>
       </div>
     `).join('');
@@ -903,17 +910,54 @@
     const rut = document.getElementById('p-rut').value.trim();
     if (!nombre) { showToast('⚠️ El nombre es obligatorio','error'); return; }
     if (!rut) { showToast('⚠️ El RUT es obligatorio','error'); return; }
+    const editId = document.getElementById('p-edit-id').value;
+    const body = { nombre, rut, edad:parseInt(document.getElementById('p-edad').value)||0, email:document.getElementById('p-email').value.trim(), telefono:document.getElementById('p-tel').value.trim(), direccion:document.getElementById('p-direccion').value.trim(), alergias:document.getElementById('p-alergias').value.trim(), diagnostico:document.getElementById('p-diagnostico').value.trim(), estado:'Activo' };
     try {
-      const res = await fetch(API_URL+'/pacientes', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
-        body: JSON.stringify({ nombre, rut, edad:parseInt(document.getElementById('p-edad').value)||0, email:document.getElementById('p-email').value.trim(), telefono:document.getElementById('p-tel').value.trim(), direccion:document.getElementById('p-direccion').value.trim(), alergias:document.getElementById('p-alergias').value.trim(), diagnostico:document.getElementById('p-diagnostico').value.trim(), estado:'Activo' }) });
+      const url = editId ? API_URL+'/pacientes/'+editId : API_URL+'/pacientes';
+      const method = editId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body: JSON.stringify(body) });
       const data = await res.json();
       if (res.ok) {
-        showToast('✅ Paciente registrado');
+        showToast(editId ? '✅ Paciente actualizado' : '✅ Paciente registrado');
         closeModal('modal-paciente');
+        document.getElementById('p-edit-id').value = '';
+        document.getElementById('modal-paciente-titulo').textContent = '👤 Nuevo Paciente';
+        document.getElementById('btn-guardar-paciente').textContent = 'Registrar paciente';
         ['p-nombre','p-rut','p-edad','p-email','p-tel','p-direccion','p-alergias','p-diagnostico'].forEach(id=>document.getElementById(id).value='');
         await cargarPacientes();
-        agregarNotificacion('👤','Nuevo paciente registrado',`${nombre} fue agregado al sistema.`,'badge-green');
-      } else showToast('❌ '+(data.error||'Error al registrar'),'error');
+        if (!editId) agregarNotificacion('👤','Nuevo paciente registrado',`${nombre} fue agregado al sistema.`,'badge-green');
+      } else showToast('❌ '+(data.error||'Error al guardar'),'error');
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  }
+
+  async function editarPaciente(id) {
+    const p = pacientes.find(x=>x.id===id);
+    if (!p) return;
+    document.getElementById('modal-paciente-titulo').textContent = '✏️ Editar Paciente';
+    document.getElementById('p-nombre').value = p.nombre||'';
+    document.getElementById('p-rut').value = p.rut||'';
+    document.getElementById('p-edad').value = p.edad||'';
+    document.getElementById('p-email').value = p.email||'';
+    document.getElementById('p-tel').value = p.telefono||'';
+    document.getElementById('p-direccion').value = p.direccion||'';
+    document.getElementById('p-alergias').value = p.alergias||'';
+    document.getElementById('p-diagnostico').value = p.diagnostico||'';
+    document.getElementById('p-edit-id').value = id;
+    document.getElementById('btn-guardar-paciente').textContent = 'Guardar cambios';
+    openModal('modal-paciente');
+  }
+
+  async function eliminarPaciente(id, nombre) {
+    if (!confirm(`¿Eliminar al paciente "${nombre}"? Esta acción no se puede deshacer.`)) return;
+    try {
+      const res = await fetch(API_URL+'/pacientes/'+id, { method:'DELETE', headers:{'Authorization':'Bearer '+authToken} });
+      if (res.ok) {
+        showToast('🗑️ Paciente eliminado');
+        await cargarPacientes();
+      } else {
+        const data = await res.json();
+        showToast('❌ '+(data.error||'Error al eliminar'),'error');
+      }
     } catch(e) { showToast('❌ '+e.message,'error'); }
   }
 
