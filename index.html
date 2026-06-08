@@ -1128,6 +1128,7 @@
     let citasDelDia = citas.filter(c=>(c.fecha?.split('T')[0]||c.fecha)===fecha);
     if (filtroEstadoCita) citasDelDia = citasDelDia.filter(c=>c.estado===filtroEstadoCita);
     citasDelDia.sort((a,b)=>(a.hora||'').localeCompare(b.hora||''));
+    const el = document.getElementById('agenda-citas-list');
     // Botón para agregar entrada clínica retroactiva en días pasados
     const hoyStr3 = new Date().toISOString().split('T')[0];
     if (fecha <= hoyStr3 && fecha !== hoyStr3) {
@@ -1136,7 +1137,6 @@
       btnRetro.innerHTML = `<button class="btn btn-outline" style="width:100%;font-size:13px;border-style:dashed;" onclick="openModal('modal-historial')">📋 Agregar entrada clínica para este día</button>`;
       el.appendChild(btnRetro);
     }
-    const el = document.getElementById('agenda-citas-list');
     if (!citasDelDia.length) {
       const hoyStr2 = new Date().toISOString().split('T')[0];
       const msgExtra = fecha < hoyStr2
