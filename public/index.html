@@ -205,7 +205,25 @@
   .treat-desc { font-size:12px; color:var(--text2); margin-top:8px; line-height:1.5; }
 
   @media(max-width:1100px) { .stats-grid{grid-template-columns:repeat(3,1fr);} .patient-grid{grid-template-columns:repeat(2,1fr);} .dashboard-grid{grid-template-columns:1fr;} .agenda-grid{grid-template-columns:1fr;} }
-  @media(max-width:768px) { .sidebar{transform:translateX(-100%);} .main{margin-left:0;} .stats-grid{grid-template-columns:1fr 1fr;} .patient-grid{grid-template-columns:1fr;} .form-grid{grid-template-columns:1fr;} }
+
+  /* Botón hamburguesa y backdrop: ocultos en escritorio */
+  .menu-toggle { display:none; background:none; border:1px solid var(--border); color:var(--text); border-radius:10px; width:42px; height:42px; font-size:20px; cursor:pointer; align-items:center; justify-content:center; }
+  .sidebar-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:90; }
+
+  @media(max-width:768px) {
+    .sidebar { transform:translateX(-100%); transition:transform .25s ease; z-index:100; }
+    .sidebar.open { transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,.5); }
+    .sidebar-backdrop.show { display:block; }
+    .main { margin-left:0; }
+    .menu-toggle { display:inline-flex; }
+    .stats-grid{grid-template-columns:1fr 1fr;} .patient-grid{grid-template-columns:1fr;} .form-grid{grid-template-columns:1fr;}
+    .topbar { gap:10px; }
+  }
+  @media(max-width:480px) {
+    .stats-grid{grid-template-columns:1fr;}
+    .main { padding:16px 14px; }
+    .topbar-title { font-size:18px; }
+  }
 </style>
 </head>
 <body>
@@ -258,6 +276,10 @@
       Agenda / Citas
       <span class="nav-badge" id="badge-agenda" style="display:none;">0</span>
     </div>
+    <div class="nav-item" onclick="navigate('disponibilidad',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Disponibilizar Agenda
+    </div>
     <div class="nav-item" onclick="navigate('pacientes',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       Pacientes
@@ -284,9 +306,11 @@
     </div>
   </div>
 </aside>
+<div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar()"></div>
 
 <main class="main">
   <div class="topbar">
+    <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Abrir menú">☰</button>
     <div>
       <div class="topbar-title" id="page-title">Dashboard</div>
       <div style="font-size:12px;color:var(--text3);margin-top:2px;" id="page-date"></div>
@@ -396,6 +420,45 @@
           </div>
           <div id="agenda-citas-list">
             <div style="text-align:center;color:var(--text3);padding:30px;">Haz clic en un día para ver sus citas</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DISPONIBILIZAR AGENDA -->
+    <div class="page" id="page-disponibilidad">
+      <div style="margin-bottom:20px;">
+        <h2 style="font-family:'Playfair Display',serif;font-size:22px;">Disponibilizar Agenda</h2>
+        <p style="font-size:13px;color:var(--text2);margin-top:4px;">Habilita los horarios en que los pacientes podrán reservar online.</p>
+      </div>
+      <div class="dashboard-grid" style="display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;">
+        <!-- Generador -->
+        <div class="card" style="padding:20px;">
+          <h3 style="font-size:15px;margin-bottom:16px;">⚡ Generador rápido</h3>
+          <div class="form-group" style="margin-bottom:12px;"><label>Fecha</label><input class="input" id="disp-fecha" type="date"></div>
+          <div style="display:flex;gap:10px;margin-bottom:12px;">
+            <div class="form-group" style="flex:1;"><label>Desde</label><input class="input" id="disp-inicio" type="time" value="09:00"></div>
+            <div class="form-group" style="flex:1;"><label>Hasta</label><input class="input" id="disp-fin" type="time" value="18:00"></div>
+          </div>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label>Intervalo (minutos)</label>
+            <select class="input" id="disp-intervalo">
+              <option value="20">20 min</option>
+              <option value="30" selected>30 min</option>
+              <option value="45">45 min</option>
+              <option value="60">60 min</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" style="width:100%;" onclick="generarDisponibilidad()">＋ Generar horarios</button>
+        </div>
+        <!-- Lista de horarios del día -->
+        <div class="card" style="padding:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 style="font-size:15px;">Horarios del día seleccionado</h3>
+            <span id="disp-count" style="font-size:12px;color:var(--text3);"></span>
+          </div>
+          <div id="disp-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;">
+            <div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:20px 0;text-align:center;">Elige una fecha para ver/generar horarios.</div>
           </div>
         </div>
       </div>
@@ -551,6 +614,19 @@
         <div class="form-group full"><label>Alergias</label><textarea class="input" id="p-alergias" rows="2" placeholder="Ej: Látex, penicilina..."></textarea></div>
         <div class="form-group full"><label>Diagnóstico / Motivo de consulta</label><textarea class="input" id="p-diagnostico" rows="2" placeholder="¿Por qué consulta?"></textarea></div>
       </div>
+
+      <!-- CUENTA DE ACCESO (solo al editar un paciente existente) -->
+      <div id="p-cuenta-box" style="display:none;margin-top:18px;border-top:1px solid var(--border);padding-top:16px;">
+        <h3 style="font-size:14px;margin-bottom:6px;">🔑 Cuenta de acceso del paciente</h3>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Crea o resetea una contraseña para que el paciente inicie sesión, vea su historial de citas y agende con su usuario.</p>
+        <div class="form-grid">
+          <div class="form-group"><label>Email de acceso</label><input class="input" id="p-cuenta-email" type="email" placeholder="usa el email del paciente"></div>
+          <div class="form-group"><label>Contraseña (mín. 6)</label><input class="input" id="p-cuenta-pwd" type="password" placeholder="••••••••"></div>
+        </div>
+        <button class="btn btn-outline" style="margin-top:8px;" onclick="crearCuentaPaciente()">Crear / Actualizar cuenta</button>
+        <span id="p-cuenta-msg" style="font-size:12px;margin-left:10px;"></span>
+      </div>
+
       <div class="form-actions">
         <button class="btn btn-outline" onclick="closeModal('modal-paciente')">Cancelar</button>
         <button class="btn btn-primary" id="btn-guardar-paciente" onclick="savePaciente()">Registrar paciente</button>
@@ -926,6 +1002,7 @@
         document.getElementById('p-edit-id').value = '';
         document.getElementById('modal-paciente-titulo').textContent = '👤 Nuevo Paciente';
         document.getElementById('btn-guardar-paciente').textContent = 'Registrar paciente';
+        document.getElementById('p-cuenta-box').style.display = 'none';
         ['p-nombre','p-rut','p-edad','p-email','p-tel','p-direccion','p-alergias','p-diagnostico'].forEach(id=>document.getElementById(id).value='');
         await cargarPacientes();
         if (!editId) agregarNotificacion('👤','Nuevo paciente registrado',`${nombre} fue agregado al sistema.`,'badge-green');
@@ -947,7 +1024,30 @@
     document.getElementById('p-diagnostico').value = p.diagnostico||'';
     document.getElementById('p-edit-id').value = id;
     document.getElementById('btn-guardar-paciente').textContent = 'Guardar cambios';
+    // Mostrar sección de cuenta de acceso (solo al editar)
+    document.getElementById('p-cuenta-box').style.display = 'block';
+    document.getElementById('p-cuenta-email').value = p.email || '';
+    document.getElementById('p-cuenta-pwd').value = '';
+    document.getElementById('p-cuenta-msg').textContent = '';
     openModal('modal-paciente');
+  }
+
+  async function crearCuentaPaciente() {
+    const id = document.getElementById('p-edit-id').value;
+    const msg = document.getElementById('p-cuenta-msg');
+    if (!id) { msg.textContent='Guarda el paciente primero'; msg.style.color='var(--danger)'; return; }
+    const email = document.getElementById('p-cuenta-email').value.trim();
+    const password = document.getElementById('p-cuenta-pwd').value;
+    if (!password || password.length < 6) { msg.textContent='Contraseña mínimo 6 caracteres'; msg.style.color='var(--danger)'; return; }
+    try {
+      const res = await fetch(API_URL+'/pacientes/'+id+'/cuenta', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
+        body: JSON.stringify({ email, password })
+      });
+      const d = await res.json();
+      if (res.ok) { msg.textContent='✅ Cuenta lista ('+d.email+')'; msg.style.color='var(--accent)'; document.getElementById('p-cuenta-pwd').value=''; }
+      else { msg.textContent='⚠️ '+(d.error||'Error'); msg.style.color='var(--danger)'; }
+    } catch { msg.textContent='Sin conexión'; msg.style.color='var(--danger)'; }
   }
 
   async function eliminarPaciente(id, nombre) {
@@ -1303,7 +1403,7 @@
   }
 
   // ========== NAV ==========
-  const TITLES = {dashboard:'Dashboard',agenda:'Agenda / Citas',pacientes:'Pacientes',historial:'Historial Clínico',notificaciones:'Notificaciones',tratamientos:'Tratamientos'};
+  const TITLES = {dashboard:'Dashboard',agenda:'Agenda / Citas',disponibilidad:'Disponibilizar Agenda',pacientes:'Pacientes',historial:'Historial Clínico',notificaciones:'Notificaciones',tratamientos:'Tratamientos'};
   function navigate(page, el) {
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -1311,12 +1411,17 @@
     if(el) el.classList.add('active');
     document.getElementById('page-title').textContent = TITLES[page]||page;
     if(page==='agenda'){renderCalendario();cargarCitasDelDia(fechaAgendaSeleccionada);}
+    if(page==='disponibilidad') initDisponibilidad();
     if(page==='notificaciones') renderNotificaciones();
   }
 
   // ========== MODAL ==========
   function openModal(id){
     document.getElementById(id).classList.add('open');
+    // Modal de paciente: la cuenta de acceso solo aplica al editar uno existente
+    if (id === 'modal-paciente' && !document.getElementById('p-edit-id').value) {
+      document.getElementById('p-cuenta-box').style.display = 'none';
+    }
     // Si se abre el modal de historial, pre-rellenar fecha de próxima cita con el día seleccionado (si es pasado o hoy)
     if (id === 'modal-historial') {
       const hoyStr = new Date().toISOString().split('T')[0];
@@ -1339,6 +1444,65 @@
     const t=document.getElementById('toast');
     t.textContent=msg; t.className='toast show'+(type==='error'?' error':'');
     toastTimer=setTimeout(()=>t.className='toast',2800);
+  }
+
+  // ========== DISPONIBILIDAD (disponibilizar agenda) ==========
+  function initDisponibilidad() {
+    const f = document.getElementById('disp-fecha');
+    if (!f.value) f.value = new Date().toISOString().split('T')[0];
+    f.onchange = loadDisponibilidad;
+    loadDisponibilidad();
+  }
+
+  async function loadDisponibilidad() {
+    const fecha = document.getElementById('disp-fecha').value;
+    const list = document.getElementById('disp-list');
+    const count = document.getElementById('disp-count');
+    if (!fecha) return;
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;">Cargando...</div>';
+    try {
+      const res = await fetch(API_URL+'/disponibilidad?fecha='+fecha, { headers:{'Authorization':'Bearer '+authToken} });
+      const slots = res.ok ? await res.json() : [];
+      const libres = slots.filter(s=>s.estado==='libre').length;
+      count.textContent = `${slots.length} horario(s) · ${libres} libre(s)`;
+      if (!slots.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:16px 0;text-align:center;">Sin horarios este día. Usa el generador.</div>'; return; }
+      list.innerHTML = slots.map(s => {
+        const reservada = s.estado==='reservada';
+        const bg = reservada ? 'var(--bg3)' : 'rgba(79,195,161,.12)';
+        const bd = reservada ? 'var(--border)' : 'var(--accent)';
+        const info = reservada ? `<div style="font-size:11px;color:var(--text3);margin-top:3px;">🔒 ${s.paciente_nombre||'Reservada'}</div>` : '';
+        const del = reservada ? '' : `<button title="Eliminar" onclick="borrarSlot(${s.id})" style="position:absolute;top:6px;right:6px;background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;">✕</button>`;
+        return `<div style="position:relative;background:${bg};border:1px solid ${bd};border-radius:10px;padding:12px 10px;text-align:center;">
+                  <div style="font-weight:700;font-size:15px;color:var(--text);">${s.hora}</div>${info}${del}
+                </div>`;
+      }).join('');
+    } catch { list.innerHTML = '<div style="color:var(--danger);grid-column:1/-1;">Error cargando horarios</div>'; }
+  }
+
+  async function generarDisponibilidad() {
+    const fecha = document.getElementById('disp-fecha').value;
+    const inicio = document.getElementById('disp-inicio').value;
+    const fin = document.getElementById('disp-fin').value;
+    const intervalo = document.getElementById('disp-intervalo').value;
+    if (!fecha || !inicio || !fin) { showToast('Completa fecha, inicio y fin', 'error'); return; }
+    try {
+      const res = await fetch(API_URL+'/disponibilidad/generar', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
+        body: JSON.stringify({ fecha, inicio, fin, intervalo, duracion: intervalo })
+      });
+      const d = await res.json();
+      if (res.ok) { showToast('✅ '+d.message); loadDisponibilidad(); }
+      else showToast('⚠️ '+(d.error||'Error'), 'error');
+    } catch { showToast('Sin conexión', 'error'); }
+  }
+
+  async function borrarSlot(id) {
+    try {
+      const res = await fetch(API_URL+'/disponibilidad/'+id, { method:'DELETE', headers:{'Authorization':'Bearer '+authToken} });
+      const d = await res.json();
+      if (res.ok) { showToast('Horario eliminado'); loadDisponibilidad(); }
+      else showToast('⚠️ '+(d.error||'Error'), 'error');
+    } catch { showToast('Sin conexión', 'error'); }
   }
 
   // ========== TEMA ==========
@@ -1528,6 +1692,21 @@
   function initTheme(){const t=localStorage.getItem('podo_theme')||'dark';if(t==='light')document.body.classList.add('light-theme');updateThemeBtn();}
   function toggleTheme(){const l=document.body.classList.toggle('light-theme');localStorage.setItem('podo_theme',l?'light':'dark');updateThemeBtn();}
   function updateThemeBtn(){const btn=document.getElementById('theme-toggle');if(!btn)return;btn.textContent=document.body.classList.contains('light-theme')?'☀️ Tema claro':'🌙 Tema oscuro';}
+
+  // ── Sidebar móvil ──
+  function toggleSidebar(){
+    const sb=document.querySelector('.sidebar');
+    const bd=document.getElementById('sidebar-backdrop');
+    const open=sb.classList.toggle('open');
+    bd.classList.toggle('show',open);
+  }
+  function closeSidebar(){
+    document.querySelector('.sidebar')?.classList.remove('open');
+    document.getElementById('sidebar-backdrop')?.classList.remove('show');
+  }
+  // Al elegir una sección en móvil, cierra el menú
+  document.querySelectorAll('.sidebar .nav-item').forEach(it =>
+    it.addEventListener('click', () => { if(window.innerWidth<=768) closeSidebar(); }));
 </script>
 
 <!-- MODAL ENTRADA CLÍNICA ESPECIALIZADA -->

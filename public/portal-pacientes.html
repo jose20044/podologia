@@ -1012,6 +1012,44 @@ body::after {
 .sbtn:hover {
   box-shadow: 0 8px 24px rgba(124,58,237,0.50) !important;
 }
+
+/* ── BARRA DE NAVEGACIÓN INFERIOR (solo móvil) ── */
+.mobile-tabbar { display:none; }
+.mobile-tabbar button {
+  flex:1; background:none; border:none; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  font:600 11px/1 'Figtree', sans-serif; color:var(--text2);
+  padding:6px 4px; min-height:48px; transition:color .15s;
+}
+.mobile-tabbar button.active { color:var(--teal); }
+.mobile-tabbar .tab-ic { font-size:20px; line-height:1; }
+
+/* ── REFINAMIENTO RESPONSIVE ── */
+@media(max-width:680px) {
+  .mobile-tabbar {
+    display:flex;
+    position:fixed; left:0; right:0; bottom:0; z-index:300;
+    background:rgba(255,255,255,.97); backdrop-filter:blur(12px);
+    border-top:1px solid var(--teal-mid);
+    box-shadow:0 -4px 20px rgba(124,58,237,.10);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  body { padding-bottom:64px; }
+  /* tap targets y legibilidad */
+  .nav-cta, .nav-link, .sbtn, button[onclick] { min-height:44px; }
+}
+
+/* Teléfonos pequeños */
+@media(max-width:480px) {
+  .hero h1 { font-size:34px; letter-spacing:-1px; }
+  .hero p, .section > p { font-size:15px; }
+  .nav-brand-sub { display:none; }
+  .section { padding:48px 18px; }
+  .hero { padding:64px 18px 84px; }
+  .bk-inner, .citas-pg { padding:40px 18px; }
+  nav { padding:0 16px; }
+  .frow { grid-template-columns:1fr; }
+}
 </style>
 </head>
 <body>
@@ -1173,16 +1211,31 @@ body::after {
           <div class="form-box">
             <div class="form-section-title">Tus datos</div>
             <div class="fg">
+              <label>RUT</label>
+              <input class="fi" type="text" id="book-rut" placeholder="12.345.678-9" oninput="onRutInput()">
+              <div id="rut-status" style="font-size:13px;margin-top:6px;min-height:18px;"></div>
+            </div>
+            <!-- Paciente existente: datos ofuscados (autocompletado) -->
+            <div id="known-patient" style="display:none;background:var(--teal-light);border-radius:12px;padding:14px 16px;margin-bottom:14px;">
+              <div style="font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">✓ Paciente reconocido</div>
+              <div style="font-size:14px;color:var(--text);line-height:1.7;">
+                <div>👤 <strong id="kp-nombre">—</strong></div>
+                <div>📧 <span id="kp-email">—</span></div>
+                <div>📱 <span id="kp-tel">—</span></div>
+              </div>
+              <div style="font-size:12px;color:var(--text2);margin-top:8px;">Mostramos tus datos ocultos por seguridad. Si no eres tú, revisa el RUT.</div>
+            </div>
+            <!-- Paciente nuevo: ingresar datos -->
+            <div id="new-patient-fields" style="display:none;">
+              <div class="fg"><label>Nombre completo</label><input class="fi" type="text" id="book-nombre" placeholder="Tu nombre"></div>
+              <div class="frow">
+                <div class="fg"><label>Teléfono</label><input class="fi" type="tel" id="book-tel" placeholder="+56 9 xxxx xxxx"></div>
+                <div class="fg"><label>Email</label><input class="fi" type="email" id="book-email" placeholder="tu@correo.com"></div>
+              </div>
+            </div>
+            <div class="fg">
               <label>Tratamiento</label>
               <select class="fi" id="book-trat" onchange="updateSummary()"><option value="">Seleccionar tratamiento...</option></select>
-            </div>
-            <div class="frow">
-              <div class="fg"><label>Nombre completo</label><input class="fi" type="text" id="book-nombre" placeholder="Tu nombre"></div>
-              <div class="fg"><label>RUT</label><input class="fi" type="text" id="book-rut" placeholder="12.345.678-9"></div>
-            </div>
-            <div class="frow">
-              <div class="fg"><label>Teléfono</label><input class="fi" type="tel" id="book-tel" placeholder="+56 9 xxxx xxxx"></div>
-              <div class="fg"><label>Email</label><input class="fi" type="email" id="book-email" placeholder="tu@correo.com"></div>
             </div>
             <div class="fg"><label>Notas (opcional)</label><textarea class="fi" id="book-notas" rows="2" placeholder="Alergias, condiciones especiales..." style="resize:vertical;"></textarea></div>
             <div class="sum-box">
@@ -1193,7 +1246,7 @@ body::after {
             </div>
             <button class="btn-conf" id="btn-conf" onclick="confirmarCita()">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              Confirmar reserva
+              Agendar
             </button>
           </div>
         </div>
@@ -1249,7 +1302,7 @@ body::after {
     <h2>¡Cita confirmada!</h2>
     <p>Tu hora fue reservada exitosamente. ¡Nos vemos pronto en <strong>PodoClinic</strong>!</p>
     <div class="sdet" id="sdet"></div>
-    <button class="sbtn" onclick="closeSuccess()">Ver mis citas</button>
+    <button class="sbtn" onclick="closeSuccess()">Listo</button>
   </div>
 </div>
 
@@ -1301,7 +1354,7 @@ function animateSvcCards() {
 }
 
 // ── APP LOGIC ──
-const API = 'https://podologia-production-0157.up.railway.app/api';
+const API = '/api'; // mismo origen que sirve la página (local o producción)
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MESES_S = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
@@ -1309,10 +1362,13 @@ let authToken = localStorage.getItem('patientToken');
 let currentUser = JSON.parse(localStorage.getItem('patientUser') || 'null');
 let tratamientos = [], selDate = null, selSlot = null, calY, calM;
 let clinicDoctorId = null;
+let availDays = new Set();   // fechas (YYYY-MM-DD) con horarios libres del mes visible
+let rutKnown = false;        // true si el RUT ingresado ya existe en la clínica
 
 async function init() {
   const now = new Date(); calY = now.getFullYear(); calM = now.getMonth();
-  renderCal(); await loadTratamientos(); updateNav();
+  await loadMonthAvailability();
+  await loadTratamientos(); updateNav();
   try {
     const r = await fetch(`${API}/clinic`);
     if (r.ok) { const d = await r.json(); clinicDoctorId = d.doctor_id; }
@@ -1320,10 +1376,25 @@ async function init() {
   if (authToken) loadMisCitas();
 }
 
+// Carga las fechas del mes visible que tienen al menos un horario libre
+async function loadMonthAvailability() {
+  const desde = `${calY}-${String(calM+1).padStart(2,'0')}-01`;
+  const last = new Date(calY, calM+1, 0).getDate();
+  const hasta = `${calY}-${String(calM+1).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+  try {
+    const r = await fetch(`${API}/public/dias-disponibles?desde=${desde}&hasta=${hasta}`);
+    availDays = new Set(r.ok ? await r.json() : []);
+  } catch { availDays = new Set(); }
+  renderCal();
+}
+
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const pg = document.getElementById(id);
   pg.classList.add('active');
+  // Sincroniza la barra de navegación móvil
+  document.querySelectorAll('.mobile-tabbar button').forEach(b =>
+    b.classList.toggle('active', b.dataset.page === id));
   window.scrollTo({top:0,behavior:'smooth'});
   // Re-observe fade-up elements on new page
   setTimeout(() => {
@@ -1335,8 +1406,9 @@ function showPage(id) {
   if (id === 'page-citas' && !authToken) { openAuth('login'); showToast('Inicia sesión para ver tus citas'); }
 }
 function goToBooking() {
-  if (!authToken) { openAuth('login'); showToast('Inicia sesión para agendar'); return; }
+  // Agendar es público: no requiere iniciar sesión
   showPage('page-agendar');
+  loadMonthAvailability();
 }
 
 async function loadTratamientos() {
@@ -1381,17 +1453,19 @@ function renderCal() {
     const str = `${calY}-${String(calM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday = date.toDateString() === today.toDateString();
     const past = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const sun = date.getDay() === 0;
     const sel = selDate === str;
+    const hasSlots = availDays.has(str);
+    // Solo se habilitan días no pasados y con horarios disponibilizados por el médico
+    const enabled = !past && hasSlots;
     let cls = 'cd';
-    if(past||sun) cls += ' past'; else cls += ' avail';
+    if(enabled) cls += ' avail'; else cls += ' past';
     if(isToday) cls += ' today';
     if(sel) cls += ' sel';
-    html += `<button class="${cls}" ${(past||sun)?'disabled':''} onclick="pickDate('${str}')">${d}</button>`;
+    html += `<button class="${cls}" ${enabled?'':'disabled'} onclick="pickDate('${str}')">${d}</button>`;
   }
   body.innerHTML = html;
 }
-function changeMonth(d) { calM+=d; if(calM<0){calM=11;calY--;} if(calM>11){calM=0;calY++;} renderCal(); }
+function changeMonth(d) { calM+=d; if(calM<0){calM=11;calY--;} if(calM>11){calM=0;calY++;} loadMonthAvailability(); }
 
 async function pickDate(str) {
   selDate = str; selSlot = null; renderCal();
@@ -1404,22 +1478,22 @@ async function pickDate(str) {
 async function renderSlots(str) {
   const wrap = document.getElementById('slots-wrap');
   wrap.innerHTML = '<div class="slots-empty">Consultando horarios...</div>';
-  let taken = [];
+  let libres = [];
   try {
-    if (authToken) {
-      const r = await fetch(`${API}/citas?fecha=${str}`, {headers:{'Authorization':'Bearer '+authToken}});
-      if (r.ok) { const c = await r.json(); taken = c.map(x => x.hora ? x.hora.slice(0,5):''); }
-    }
+    const r = await fetch(`${API}/public/disponibilidad?fecha=${str}`);
+    if (r.ok) libres = (await r.json()).map(x => x.hora);
   } catch {}
   const dt = new Date(str+'T12:00:00');
   const lbl = `${dt.getDate()} de ${MESES[dt.getMonth()]}`;
-  const all = [];
-  for(let h=9;h<19;h++){all.push(`${String(h).padStart(2,'0')}:00`);all.push(`${String(h).padStart(2,'0')}:30`);}
-  let html = `<div class="slots-lbl">${lbl} — ${all.length-taken.length} disponibles</div><div class="slots-grid">`;
-  all.forEach(s => {
-    const t = taken.includes(s), sel2 = selSlot===s;
-    let cls = 'slot'; if(t) cls+=' st'; if(sel2) cls+=' ss';
-    html += `<button class="${cls}" ${t?'disabled':''} onclick="pickSlot('${s}')">${s}</button>`;
+  if (!libres.length) {
+    wrap.innerHTML = `<div class="slots-empty">No hay horarios disponibles para el ${lbl}. Prueba otra fecha.</div>`;
+    return;
+  }
+  let html = `<div class="slots-lbl">${lbl} — ${libres.length} disponibles</div><div class="slots-grid">`;
+  libres.forEach(s => {
+    const sel2 = selSlot===s;
+    let cls = 'slot'; if(sel2) cls+=' ss';
+    html += `<button class="${cls}" onclick="pickSlot('${s}')">${s}</button>`;
   });
   html += '</div>'; wrap.innerHTML = html;
 }
@@ -1439,50 +1513,82 @@ function updateSteps() {
   if(document.getElementById('book-trat').value){s2.classList.remove('on');s2.classList.add('done');s3.classList.add('on');}
 }
 
+// Búsqueda de RUT con debounce: autocompleta (ofuscado) o pide datos nuevos
+let rutTimer = null;
+function onRutInput() {
+  rutKnown = false;
+  const status = document.getElementById('rut-status');
+  const known = document.getElementById('known-patient');
+  const nuevo = document.getElementById('new-patient-fields');
+  known.style.display = 'none'; nuevo.style.display = 'none';
+  const raw = document.getElementById('book-rut').value;
+  const norm = raw.replace(/[.\-\s]/g,'');
+  status.textContent = '';
+  if (norm.length < 7) return;
+  status.textContent = '🔍 Buscando...'; status.style.color = 'var(--text2)';
+  clearTimeout(rutTimer);
+  rutTimer = setTimeout(async () => {
+    try {
+      const r = await fetch(`${API}/public/paciente?rut=${encodeURIComponent(raw)}`);
+      const d = await r.json();
+      if (d.exists) {
+        rutKnown = true;
+        document.getElementById('kp-nombre').textContent = d.nombre_masked || '—';
+        document.getElementById('kp-email').textContent = d.email_masked || '—';
+        document.getElementById('kp-tel').textContent = d.telefono_masked || '—';
+        known.style.display = 'block'; nuevo.style.display = 'none';
+        status.textContent = '✓ Te reconocimos, completa tu reserva'; status.style.color = 'var(--green)';
+      } else {
+        rutKnown = false;
+        known.style.display = 'none'; nuevo.style.display = 'block';
+        status.textContent = 'Paciente nuevo: ingresa tus datos'; status.style.color = 'var(--teal)';
+      }
+    } catch { status.textContent = ''; }
+  }, 450);
+}
+
 async function confirmarCita() {
-  if(!authToken){openAuth('login');return;}
   if(!selDate){showToast('⚠️ Selecciona una fecha');return;}
   if(!selSlot){showToast('⚠️ Selecciona un horario');return;}
-  const nombre=document.getElementById('book-nombre').value.trim();
   const rut=document.getElementById('book-rut').value.trim();
-  const tel=document.getElementById('book-tel').value.trim();
-  const email=document.getElementById('book-email').value.trim();
+  if(!rut || rut.replace(/[.\-\s]/g,'').length < 7){showToast('⚠️ Ingresa un RUT válido');return;}
+  const nombre=(document.getElementById('book-nombre')?.value||'').trim();
+  const tel=(document.getElementById('book-tel')?.value||'').trim();
+  const email=(document.getElementById('book-email')?.value||'').trim();
   const trat=document.getElementById('book-trat').value;
   const notas=document.getElementById('book-notas').value.trim();
-  if(!nombre||!rut){showToast('⚠️ Nombre y RUT son obligatorios');return;}
+  if(!rutKnown && !nombre){showToast('⚠️ Ingresa tu nombre completo');return;}
   const btn=document.getElementById('btn-conf');
-  btn.disabled=true; btn.innerHTML='⏳ Reservando...';
+  const btnHtml='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Agendar';
+  btn.disabled=true; btn.innerHTML='⏳ Agendando...';
   try {
-    let pid = currentUser?.paciente_id;
-    if(!pid){
-      const rp = await fetch(`${API}/pacientes`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},body:JSON.stringify({nombre,rut,email,telefono:tel,estado:'Activo',owner_user_id:clinicDoctorId})});
-      const dp = await rp.json(); pid = dp.id;
-      if(pid){currentUser.paciente_id=pid;localStorage.setItem('patientUser',JSON.stringify(currentUser));}
-    }
-    if(!pid){showToast('❌ No se pudo registrar el paciente');btn.disabled=false;btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Confirmar reserva';return;}
-    const rc = await fetch(`${API}/citas`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},body:JSON.stringify({paciente_id:pid,fecha:selDate,hora:selSlot,tratamiento:trat,notas,estado:'Confirmada'})});
+    const rc = await fetch(`${API}/public/citas`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({rut,nombre,telefono:tel,email,fecha:selDate,hora:selSlot,tratamiento:trat,notas})});
     if(rc.ok){
       const dt=new Date(selDate+'T12:00:00');
-      document.getElementById('sdet').innerHTML=`📅 <strong>${dt.getDate()} de ${MESES[dt.getMonth()]} ${dt.getFullYear()}</strong><br>🕐 <strong>${selSlot} hrs</strong><br>💆 <strong>${trat||'Consulta general'}</strong><br>👤 <strong>${nombre}</strong>`;
+      document.getElementById('sdet').innerHTML=`📅 <strong>${dt.getDate()} de ${MESES[dt.getMonth()]} ${dt.getFullYear()}</strong><br>🕐 <strong>${selSlot} hrs</strong><br>💆 <strong>${trat||'Consulta general'}</strong>`;
       document.getElementById('sov').classList.add('open');
-      loadMisCitas();
-    } else { const e=await rc.json(); showToast('❌ '+(e.error||'Error al reservar')); }
+    } else { const e=await rc.json(); showToast('❌ '+(e.error||'Error al agendar')); }
   } catch { showToast('❌ Sin conexión al servidor'); }
-  btn.disabled=false;
-  btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Confirmar reserva';
+  btn.disabled=false; btn.innerHTML=btnHtml;
 }
 
 function closeSuccess() {
   document.getElementById('sov').classList.remove('open');
-  selDate=null; selSlot=null;
+  selDate=null; selSlot=null; rutKnown=false;
   document.getElementById('sum-fecha').textContent='—';
   document.getElementById('sum-hora').textContent='—';
   document.getElementById('sum-trat').textContent='—';
+  // Limpiar formulario
+  ['book-rut','book-nombre','book-tel','book-email','book-notas','book-trat'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('rut-status').textContent='';
+  document.getElementById('known-patient').style.display='none';
+  document.getElementById('new-patient-fields').style.display='none';
   ['bs1','bs2','bs3'].forEach(id=>{const el=document.getElementById(id);el.classList.remove('done','on');});
   document.getElementById('bs1').classList.add('on');
-  renderCal();
   document.getElementById('slots-wrap').innerHTML='<div class="slots-empty">Selecciona una fecha para ver horarios</div>';
-  showPage('page-citas');
+  loadMonthAvailability();   // el horario reservado ya no debe aparecer
+  showPage('page-home');
 }
 
 async function loadMisCitas() {
@@ -1570,6 +1676,14 @@ document.getElementById('sov').addEventListener('click',e=>{if(e.target.id==='so
 
 init();
 </script>
+
+<!-- Barra de navegación inferior (visible solo en móvil) -->
+<nav class="mobile-tabbar" aria-label="Navegación móvil">
+  <button data-page="page-home" class="active" onclick="showPage('page-home')"><span class="tab-ic">🏠</span>Inicio</button>
+  <button data-page="page-servicios" onclick="showPage('page-servicios')"><span class="tab-ic">💅</span>Servicios</button>
+  <button data-page="page-agendar" onclick="goToBooking()"><span class="tab-ic">📅</span>Agendar</button>
+  <button data-page="page-citas" onclick="showPage('page-citas')"><span class="tab-ic">🗓️</span>Mis citas</button>
+</nav>
 </body>
 </html>
 

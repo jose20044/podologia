@@ -3,14 +3,17 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "node server.js"
+healthcheckPath = "/health"
+healthcheckTimeout = 120
 restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
+restartPolicyMaxRetries = 10
 
 [[services]]
 name = "app"
 
 [services.variables]
 PORT = "3001"
+NODE_ENV = "production"
 MYSQLHOST = "${{MySQL.MYSQLHOST}}"
 MYSQLUSER = "${{MySQL.MYSQLUSER}}"
 MYSQLPASSWORD = "${{MySQL.MYSQLPASSWORD}}"

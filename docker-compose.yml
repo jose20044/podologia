@@ -1,0 +1,46 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: podoclinic-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-podoclinic}
+      MYSQL_DATABASE: ${DB_NAME:-podologia_db}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD:-podoclinic}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build: .
+    container_name: podoclinic-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-podoclinic}
+      DB_NAME: ${DB_NAME:-podologia_db}
+      DB_PORT: 3306
+      JWT_SECRET: ${JWT_SECRET}
+      SETUP_TOKEN: ${SETUP_TOKEN}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      NODE_ENV: production
+    ports:
+      - "3001:3001"
+    # Monta el código para que puedas editar y reiniciar sin reconstruir.
+    # node_modules queda aislado dentro del contenedor.
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+volumes:
+  mysql_data:

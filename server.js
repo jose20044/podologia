@@ -7,17 +7,131 @@ const bcrypt = require('bcrypt');
 require('dotenv').config();
 
 const app = express();
+app.set('trust proxy', 1); // confía en el proxy (Railway) para obtener la IP real
 const PORT = process.env.PORT || 3001;
+
+// JWT_SECRET DEBE ser fijo. Si cambia (p.ej. al reiniciar), todas las sesiones
+// se invalidan y los usuarios son expulsados. En producción es obligatorio.
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('❌ FATAL: JWT_SECRET no está definido. Configúralo en las variables de entorno.');
+    process.exit(1);
+  }
+  console.warn('⚠️  JWT_SECRET no definido: usando uno temporal (las sesiones se cerrarán al reiniciar). Solo para desarrollo.');
+}
 const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(32).toString('hex');
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// ──────────────────────────────────────────
+// SEGURIDAD: cabeceras HTTP
+// ──────────────────────────────────────────
+app.disable('x-powered-by'); // no revelar que es Express
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '0');
+  // Content-Security-Policy: se permite 'unsafe-inline' porque las páginas usan
+  // <style>/<script> embebidos. Restringe orígenes externos a las fuentes de Google.
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "frame-ancestors 'self'"
+  ].join('; '));
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// CORS: en producción restringe a CORS_ORIGIN; en local permite todo.
+const corsOrigin = process.env.CORS_ORIGIN;
+app.use(cors(corsOrigin ? { origin: corsOrigin.split(',').map(s => s.trim()) } : {}));
+
+// Límite de tamaño del body para evitar abusos
+app.use(express.json({ limit: '256kb' }));
+
 app.use((req, res, next) => {
   if (req.url.endsWith('.html')) res.type('text/html; charset=utf-8');
   next();
 });
-app.use(express.static(path.join(__dirname)));
+
+// Solo se sirven los archivos de public/ (NO el código fuente, .sql, .env, etc.)
+// index:false → '/' lo maneja nuestra ruta (portal de pacientes), no index.html.
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+
+// ──────────────────────────────────────────
+// RATE LIMITER simple en memoria (anti fuerza bruta)
+// Para una sola instancia es suficiente; si escalas a varias, usar Redis.
+// ──────────────────────────────────────────
+function rateLimit({ windowMs, max, message }) {
+  const hits = new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of hits) if (now > v.reset) hits.delete(k);
+  }, windowMs).unref();
+
+  return (req, res, next) => {
+    const key = req.ip || req.connection?.remoteAddress || 'unknown';
+    const now = Date.now();
+    let entry = hits.get(key);
+    if (!entry || now > entry.reset) {
+      entry = { count: 0, reset: now + windowMs };
+      hits.set(key, entry);
+    }
+    entry.count++;
+    if (entry.count > max) {
+      const retry = Math.ceil((entry.reset - now) / 1000);
+      res.setHeader('Retry-After', retry);
+      return res.status(429).json({ error: message || 'Demasiadas peticiones, intenta más tarde.' });
+    }
+    next();
+  };
+}
+
+// Máx 10 intentos de login/registro por IP cada 15 minutos
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Demasiados intentos. Espera unos minutos e intenta de nuevo.'
+});
+
+// Validación básica de email
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Limitador para endpoints públicos (consulta de RUT, agendar): más permisivo
+// que el de auth pero evita scraping/enumeración masiva.
+const publicLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 60,
+  message: 'Demasiadas solicitudes. Espera un momento.'
+});
+
+// Normaliza un RUT: quita puntos/guiones/espacios y pasa a minúsculas
+function normalizeRut(rut) {
+  return String(rut || '').replace(/[.\-\s]/g, '').toLowerCase();
+}
+
+// Ofuscación de datos personales (autocompletado sin exponer PII completa)
+function maskName(name) {
+  return String(name || '').trim().split(/\s+/).map(w =>
+    w.length <= 2 ? w[0] + '·' : w.slice(0, 2) + '·'.repeat(Math.min(w.length - 2, 4))
+  ).join(' ');
+}
+function maskEmail(email) {
+  const [u, d] = String(email || '').split('@');
+  if (!d) return '';
+  const uu = u.length <= 2 ? u[0] + '·' : u.slice(0, 2) + '·'.repeat(3);
+  return `${uu}@${d}`;
+}
+function maskPhone(tel) {
+  const digits = String(tel || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return '·'.repeat(Math.max(0, digits.length - 3)) + digits.slice(-3);
+}
 
 // Pool de base de datos
 // Soporta MYSQLHOST/MYSQLUSER/... (Railway) y DB_HOST/DB_USER/... (local)
@@ -35,6 +149,20 @@ const pool = mysql.createPool({
 // ──────────────────────────────────────────
 // AUTO-INICIALIZACIÓN DE BASE DE DATOS
 // ──────────────────────────────────────────
+async function waitForDatabase(maxRetries = 15, delayMs = 3000) {
+  for (let intento = 1; intento <= maxRetries; intento++) {
+    try {
+      const conn = await pool.getConnection();
+      conn.release();
+      return true;
+    } catch (err) {
+      console.warn(`⏳ Esperando a MySQL (intento ${intento}/${maxRetries}): ${err.message}`);
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  return false;
+}
+
 async function initDatabase() {
   try {
     const conn = await pool.getConnection();
@@ -101,6 +229,20 @@ async function initDatabase() {
     `);
 
     await conn.execute(`
+      CREATE TABLE IF NOT EXISTS disponibilidad (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        fecha DATE NOT NULL,
+        hora TIME NOT NULL,
+        duracion INT DEFAULT 30,
+        estado VARCHAR(20) DEFAULT 'libre',
+        cita_id INT DEFAULT NULL,
+        creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_slot (fecha, hora),
+        INDEX idx_disp_fecha (fecha)
+      )
+    `);
+
+    await conn.execute(`
       CREATE TABLE IF NOT EXISTS tratamientos (
         id INT AUTO_INCREMENT PRIMARY KEY,
         nombre VARCHAR(100) NOT NULL,
@@ -138,10 +280,9 @@ async function initDatabase() {
     console.log('✅ Base de datos lista');
   } catch (err) {
     console.error('❌ Error BD:', err.message);
+    throw err;
   }
 }
-
-initDatabase();
 
 // ──────────────────────────────────────────
 // HEALTH CHECK
@@ -167,32 +308,28 @@ const verifyToken = (req, res, next) => {
   });
 };
 
-// Solo médicos/admin
-const verifyDoctor = (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Token requerido' });
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(401).json({ error: 'Token inválido' });
-    if (decoded.role !== 'doctor' && decoded.role !== 'admin') {
-      return res.status(403).json({ error: 'Acceso solo para profesionales' });
-    }
-    req.userId = decoded.id;
-    req.userName = decoded.name;
-    req.userRole = decoded.role;
-    next();
-  });
+// Exige uno de los roles indicados (se usa tras verifyToken)
+const requireRole = (...roles) => (req, res, next) => {
+  if (!roles.includes(req.userRole)) {
+    return res.status(403).json({ error: 'Acceso solo para profesionales' });
+  }
+  next();
 };
+
+// Solo médicos/admin: verifica token Y rol
+const verifyDoctor = [verifyToken, requireRole('doctor', 'admin')];
 
 // ──────────────────────────────────────────
 // RUTAS DE AUTENTICACIÓN
 // ──────────────────────────────────────────
 
 // Login (pacientes Y médicos)
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
-    if (password.length < 6) return res.status(400).json({ error: 'Contraseña inválida' });
+    if (typeof password !== 'string' || password.length < 6) return res.status(400).json({ error: 'Contraseña inválida' });
+    if (!EMAIL_RE.test(String(email))) return res.status(400).json({ error: 'Email inválido' });
 
     const conn = await pool.getConnection();
     const [users] = await conn.execute('SELECT * FROM users WHERE email = ?', [email.toLowerCase().trim()]);
@@ -213,19 +350,33 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Registro (por defecto, rol paciente)
-app.post('/api/auth/register', async (req, res) => {
+// Registro público: SIEMPRE crea pacientes.
+// Para crear un médico hay que enviar la cabecera 'x-setup-token' con el valor
+// de SETUP_TOKEN (solo lo conoce el administrador). Esto evita que cualquiera
+// se auto-asigne rol 'doctor' y vea a todos los pacientes de la clínica.
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'Todos los campos son requeridos' });
-    if (password.length < 6) return res.status(400).json({ error: 'Contraseña mínimo 6 caracteres' });
+    if (typeof password !== 'string' || password.length < 6) return res.status(400).json({ error: 'Contraseña mínimo 6 caracteres' });
+    if (!EMAIL_RE.test(String(email))) return res.status(400).json({ error: 'Email inválido' });
+    if (String(name).trim().length > 100) return res.status(400).json({ error: 'Nombre demasiado largo' });
+
+    // Solo se concede rol 'doctor' si se presenta el token de setup correcto.
+    let userRole = 'patient';
+    if (role === 'doctor') {
+      const setupToken = req.headers['x-setup-token'];
+      if (!process.env.SETUP_TOKEN || setupToken !== process.env.SETUP_TOKEN) {
+        return res.status(403).json({ error: 'No autorizado para crear cuentas de profesional' });
+      }
+      userRole = 'doctor';
+    }
 
     const conn = await pool.getConnection();
     const [existing] = await conn.execute('SELECT id FROM users WHERE email = ?', [email.toLowerCase().trim()]);
     if (existing.length) { conn.release(); return res.status(400).json({ error: 'El email ya está registrado' }); }
 
     const hash = await bcrypt.hash(password, 10);
-    const userRole = role === 'doctor' ? 'doctor' : 'patient';
 
     await conn.execute(
       'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
@@ -234,6 +385,139 @@ app.post('/api/auth/register', async (req, res) => {
     conn.release();
     res.json({ success: true, message: 'Usuario registrado correctamente' });
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ──────────────────────────────────────────
+// RUTAS PÚBLICAS (sin login) — agendamiento de pacientes
+// ──────────────────────────────────────────
+
+// Fechas (del rango/mes) que tienen al menos un horario libre — para el calendario
+app.get('/api/public/dias-disponibles', publicLimiter, async (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+    const conn = await pool.getConnection();
+    let q = "SELECT DISTINCT fecha FROM disponibilidad WHERE estado = 'libre' AND fecha >= CURDATE()";
+    const params = [];
+    if (desde) { q += ' AND fecha >= ?'; params.push(desde); }
+    if (hasta) { q += ' AND fecha <= ?'; params.push(hasta); }
+    q += ' ORDER BY fecha';
+    const [rows] = await conn.execute(q, params);
+    conn.release();
+    // Devuelve fechas en formato YYYY-MM-DD
+    res.json(rows.map(r => (r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha).slice(0, 10))));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Horarios LIBRES de una fecha concreta
+app.get('/api/public/disponibilidad', publicLimiter, async (req, res) => {
+  try {
+    const { fecha } = req.query;
+    if (!fecha) return res.status(400).json({ error: 'Fecha requerida' });
+    const conn = await pool.getConnection();
+    const [rows] = await conn.execute(
+      "SELECT hora, duracion FROM disponibilidad WHERE fecha = ? AND estado = 'libre' ORDER BY hora",
+      [fecha]
+    );
+    conn.release();
+    res.json(rows.map(r => ({ hora: String(r.hora).slice(0, 5), duracion: r.duracion })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Consulta de paciente por RUT (datos OFUSCADOS). Sirve para autocompletar.
+app.get('/api/public/paciente', publicLimiter, async (req, res) => {
+  try {
+    const rut = normalizeRut(req.query.rut);
+    if (!rut || rut.length < 7) return res.status(400).json({ error: 'RUT inválido' });
+    const conn = await pool.getConnection();
+    const [rows] = await conn.execute(
+      "SELECT nombre, email, telefono FROM pacientes WHERE REPLACE(REPLACE(REPLACE(LOWER(rut),'.',''),'-',''),' ','') = ? LIMIT 1",
+      [rut]
+    );
+    conn.release();
+    if (!rows.length) return res.json({ exists: false });
+    const p = rows[0];
+    res.json({
+      exists: true,
+      nombre_masked: maskName(p.nombre),
+      email_masked: maskEmail(p.email),
+      telefono_masked: maskPhone(p.telefono)
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Agendar cita SIN login. Reserva un horario disponibilizado por el médico.
+app.post('/api/public/citas', publicLimiter, async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const { rut, nombre, telefono, email, fecha, hora, tratamiento, notas } = req.body;
+    if (!rut || !fecha || !hora) return res.status(400).json({ error: 'RUT, fecha y hora son requeridos' });
+    const rutNorm = normalizeRut(rut);
+    if (rutNorm.length < 7) return res.status(400).json({ error: 'RUT inválido' });
+    if (email && !EMAIL_RE.test(String(email))) return res.status(400).json({ error: 'Email inválido' });
+
+    await conn.beginTransaction();
+
+    // 1) El horario debe existir y estar libre (bloqueo para evitar doble reserva)
+    const [slots] = await conn.execute(
+      "SELECT id, duracion FROM disponibilidad WHERE fecha = ? AND hora = ? AND estado = 'libre' FOR UPDATE",
+      [fecha, hora]
+    );
+    if (!slots.length) {
+      await conn.rollback(); conn.release();
+      return res.status(409).json({ error: 'Ese horario ya no está disponible. Elige otro.' });
+    }
+    const slot = slots[0];
+
+    // 2) Buscar paciente por RUT; si no existe, crearlo
+    const [pac] = await conn.execute(
+      "SELECT id FROM pacientes WHERE REPLACE(REPLACE(REPLACE(LOWER(rut),'.',''),'-',''),' ','') = ? LIMIT 1",
+      [rutNorm]
+    );
+    let pacienteId;
+    if (pac.length) {
+      pacienteId = pac[0].id;
+    } else {
+      if (!nombre) { await conn.rollback(); conn.release(); return res.status(400).json({ error: 'Nombre requerido para nuevo paciente' }); }
+      // Owner = primer doctor de la clínica (para que todos los médicos lo vean)
+      const [docs] = await conn.execute("SELECT id FROM users WHERE role = 'doctor' ORDER BY id LIMIT 1");
+      const ownerId = docs.length ? docs[0].id : 1;
+      const [ins] = await conn.execute(
+        `INSERT INTO pacientes (user_id, nombre, rut, email, telefono, estado, fecha_registro)
+         VALUES (?, ?, ?, ?, ?, 'Activo', NOW())`,
+        [ownerId, String(nombre).trim(), String(rut).trim(), email || '', telefono || '']
+      );
+      pacienteId = ins.insertId;
+    }
+
+    // 3) Crear la cita (queda Pendiente de confirmación por el médico)
+    const [docs2] = await conn.execute("SELECT id FROM users WHERE role = 'doctor' ORDER BY id LIMIT 1");
+    const ownerCita = docs2.length ? docs2[0].id : 1;
+    const [citaIns] = await conn.execute(
+      `INSERT INTO citas (user_id, paciente_id, fecha, hora, duracion, tratamiento, notas, estado)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'Pendiente')`,
+      [ownerCita, pacienteId, fecha, hora, slot.duracion || 30, tratamiento || '', notas || '']
+    );
+
+    // 4) Marcar el horario como reservado
+    await conn.execute(
+      "UPDATE disponibilidad SET estado = 'reservada', cita_id = ? WHERE id = ?",
+      [citaIns.insertId, slot.id]
+    );
+
+    await conn.commit();
+    conn.release();
+    res.json({ success: true, message: 'Cita agendada. Queda pendiente de confirmación.' });
+  } catch (e) {
+    try { await conn.rollback(); } catch {}
+    conn.release();
     res.status(500).json({ error: e.message });
   }
 });
@@ -328,6 +612,119 @@ app.delete('/api/pacientes/:id', verifyDoctor, async (req, res) => {
     await conn.execute('DELETE FROM pacientes WHERE id=?', [req.params.id]);
     conn.release();
     res.json({ success: true, message: 'Paciente eliminado' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Crear o actualizar la CUENTA DE ACCESO (login) de un paciente.
+// El médico le asigna email + contraseña; el paciente queda vinculado por email
+// y puede iniciar sesión para ver sus citas y agendar nuevas.
+app.post('/api/pacientes/:id/cuenta', verifyDoctor, async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!password || String(password).length < 6) return res.status(400).json({ error: 'Contraseña mínimo 6 caracteres' });
+
+    const conn = await pool.getConnection();
+    const [pacs] = await conn.execute('SELECT id, nombre, email FROM pacientes WHERE id = ?', [req.params.id]);
+    if (!pacs.length) { conn.release(); return res.status(404).json({ error: 'Paciente no encontrado' }); }
+    const pac = pacs[0];
+
+    // Email de la cuenta: el indicado, o el que ya tiene el paciente
+    const cuentaEmail = String(email || pac.email || '').toLowerCase().trim();
+    if (!EMAIL_RE.test(cuentaEmail)) { conn.release(); return res.status(400).json({ error: 'El paciente necesita un email válido para la cuenta' }); }
+
+    const hash = await bcrypt.hash(String(password), 10);
+    const [users] = await conn.execute('SELECT id, role FROM users WHERE email = ?', [cuentaEmail]);
+
+    if (users.length) {
+      // Ya existe una cuenta con ese email: solo se permite resetear si es paciente
+      if (users[0].role !== 'patient') { conn.release(); return res.status(409).json({ error: 'Ese email pertenece a una cuenta de profesional' }); }
+      await conn.execute('UPDATE users SET password = ? WHERE id = ?', [hash, users[0].id]);
+    } else {
+      await conn.execute(
+        "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'patient')",
+        [pac.nombre, cuentaEmail, hash]
+      );
+    }
+
+    // Asegura que el email del paciente coincida con el de su cuenta (vínculo)
+    if (cuentaEmail !== String(pac.email || '').toLowerCase().trim()) {
+      await conn.execute('UPDATE pacientes SET email = ? WHERE id = ?', [cuentaEmail, pac.id]);
+    }
+    conn.release();
+    res.json({ success: true, message: 'Cuenta de paciente lista', email: cuentaEmail });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ──────────────────────────────────────────
+// RUTAS DE DISPONIBILIDAD (admin) — disponibilizar agenda
+// ──────────────────────────────────────────
+
+// Generador rápido: crea slots para una fecha entre inicio y fin cada N minutos
+app.post('/api/disponibilidad/generar', verifyDoctor, async (req, res) => {
+  try {
+    const { fecha, inicio, fin, intervalo, duracion } = req.body;
+    if (!fecha || !inicio || !fin) return res.status(400).json({ error: 'Fecha, inicio y fin son requeridos' });
+    const step = parseInt(intervalo) || 30;
+    const dur = parseInt(duracion) || step;
+    if (step < 5 || step > 240) return res.status(400).json({ error: 'Intervalo fuera de rango' });
+
+    const toMin = h => { const [hh, mm] = String(h).split(':').map(Number); return hh * 60 + mm; };
+    const start = toMin(inicio), end = toMin(fin);
+    if (isNaN(start) || isNaN(end) || end <= start) return res.status(400).json({ error: 'Rango horario inválido' });
+    if ((end - start) / step > 100) return res.status(400).json({ error: 'Demasiados horarios; reduce el rango o aumenta el intervalo' });
+
+    const conn = await pool.getConnection();
+    let creados = 0;
+    for (let m = start; m < end; m += step) {
+      const hora = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:00`;
+      // INSERT IGNORE para no duplicar (UNIQUE fecha+hora)
+      const [r] = await conn.execute(
+        "INSERT IGNORE INTO disponibilidad (fecha, hora, duracion, estado) VALUES (?, ?, ?, 'libre')",
+        [fecha, hora, dur]
+      );
+      if (r.affectedRows) creados++;
+    }
+    conn.release();
+    res.json({ success: true, creados, message: `${creados} horario(s) habilitado(s)` });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Lista todos los slots de una fecha (libres y reservados) para el panel admin
+app.get('/api/disponibilidad', verifyDoctor, async (req, res) => {
+  try {
+    const { fecha } = req.query;
+    if (!fecha) return res.status(400).json({ error: 'Fecha requerida' });
+    const conn = await pool.getConnection();
+    const [rows] = await conn.execute(
+      `SELECT d.id, d.hora, d.duracion, d.estado, d.cita_id,
+              p.nombre AS paciente_nombre
+       FROM disponibilidad d
+       LEFT JOIN citas c ON d.cita_id = c.id
+       LEFT JOIN pacientes p ON c.paciente_id = p.id
+       WHERE d.fecha = ? ORDER BY d.hora`,
+      [fecha]
+    );
+    conn.release();
+    res.json(rows.map(r => ({ ...r, hora: String(r.hora).slice(0, 5) })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Eliminar un slot (solo si está libre)
+app.delete('/api/disponibilidad/:id', verifyDoctor, async (req, res) => {
+  try {
+    const conn = await pool.getConnection();
+    const [r] = await conn.execute("DELETE FROM disponibilidad WHERE id = ? AND estado = 'libre'", [req.params.id]);
+    conn.release();
+    if (!r.affectedRows) return res.status(409).json({ error: 'No se puede borrar: el horario está reservado' });
+    res.json({ success: true, message: 'Horario eliminado' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -479,6 +876,14 @@ app.put('/api/citas/:id', verifyToken, async (req, res) => {
       );
     }
 
+    // Si se canceló la cita, el horario vuelve a quedar libre
+    if (estado === 'Cancelada') {
+      await conn.execute(
+        "UPDATE disponibilidad SET estado = 'libre', cita_id = NULL WHERE cita_id = ?",
+        [req.params.id]
+      );
+    }
+
     conn.release();
     res.json({ success: true, message: 'Cita actualizada' });
   } catch (e) {
@@ -489,6 +894,11 @@ app.put('/api/citas/:id', verifyToken, async (req, res) => {
 app.delete('/api/citas/:id', verifyDoctor, async (req, res) => {
   try {
     const conn = await pool.getConnection();
+    // Liberar el horario asociado antes de borrar la cita
+    await conn.execute(
+      "UPDATE disponibilidad SET estado = 'libre', cita_id = NULL WHERE cita_id = ?",
+      [req.params.id]
+    );
     await conn.execute('DELETE FROM citas WHERE id = ?', [req.params.id]);
     conn.release();
     res.json({ success: true, message: 'Cita eliminada' });
@@ -557,23 +967,34 @@ app.get('/api/clinic', async (req, res) => {
   }
 });
 
-// Servir portal de pacientes en /pacientes
-app.get('/pacientes', (req, res) => {
-  res.sendFile(path.join(__dirname, 'portal-pacientes.html'));
+// Página principal = PORTAL DE PACIENTES
+app.get(['/', '/pacientes'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'portal-pacientes.html'));
 });
 
-// Servir app médico en raíz /
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// Panel médico (privado) en /medico
+app.get(['/medico', '/admin'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // ──────────────────────────────────────────
 // START
 // ──────────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`🦶 PodoClinic corriendo en http://localhost:${PORT}`);
-  console.log(`👩‍⚕️  Panel médico:     http://localhost:${PORT}/`);
-  console.log(`🙋  Portal pacientes: http://localhost:${PORT}/pacientes`);
-  console.log(`📊  Base de datos:    ${process.env.DB_NAME || 'podologia_db'}`);
-});
+async function startServer() {
+  const dbLista = await waitForDatabase();
+  if (!dbLista) {
+    console.error('❌ No se pudo conectar a MySQL tras varios intentos. Abortando arranque.');
+    process.exit(1);
+  }
+  await initDatabase();
+
+  app.listen(PORT, () => {
+    console.log(`🦶 PodoClinic corriendo en http://localhost:${PORT}`);
+    console.log(`👩‍⚕️  Panel médico:     http://localhost:${PORT}/`);
+    console.log(`🙋  Portal pacientes: http://localhost:${PORT}/pacientes`);
+    console.log(`📊  Base de datos:    ${process.env.DB_NAME || 'podologia_db'}`);
+  });
+}
+
+startServer();
