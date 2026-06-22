@@ -496,6 +496,19 @@ nav.scrolled {
 .slot.ss { background:linear-gradient(135deg,var(--teal),var(--teal2)); color:#fff; border-color:var(--teal); box-shadow:0 4px 12px rgba(124,58,237,.3); }
 .slot.st { background:var(--bg); color:var(--text3); cursor:default; text-decoration:line-through; }
 .slots-empty { font-size:14px; color:var(--text3); padding:28px 0; text-align:center; }
+/* Tarjetas de especialista: avatar a la izquierda, horas a la derecha */
+.esp-card { display:flex; gap:14px; align-items:flex-start; background:var(--bg2); border:1px solid var(--teal-mid); border-radius:16px; padding:14px 16px; margin-bottom:12px; }
+.esp-side { display:flex; gap:10px; align-items:center; min-width:140px; max-width:160px; flex-shrink:0; }
+.esp-av { width:46px; height:46px; border-radius:50%; background:linear-gradient(135deg,var(--teal),var(--teal2)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex-shrink:0; }
+.esp-meta { min-width:0; }
+.esp-name { font-weight:700; font-size:14px; color:var(--text); line-height:1.2; }
+.esp-spec { font-size:12px; color:var(--text2); margin-top:2px; }
+.esp-slots { display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:8px; flex:1; }
+@media(max-width:560px){
+  .esp-card { flex-direction:column; gap:10px; }
+  .esp-side { max-width:none; }
+  .esp-slots { grid-template-columns:repeat(auto-fill,minmax(60px,1fr)); }
+}
 
 /* Form right */
 .form-box {
@@ -1242,6 +1255,7 @@ body::after {
               <div class="sum-ttl">Resumen de tu reserva</div>
               <div class="sum-row"><span>📅 Fecha</span><strong id="sum-fecha">—</strong></div>
               <div class="sum-row"><span>🕐 Hora</span><strong id="sum-hora">—</strong></div>
+              <div class="sum-row"><span>🩺 Especialista</span><strong id="sum-esp">—</strong></div>
               <div class="sum-row"><span>💆 Tratamiento</span><strong id="sum-trat">—</strong></div>
             </div>
             <button class="btn-conf" id="btn-conf" onclick="confirmarCita()">
@@ -1364,6 +1378,7 @@ let tratamientos = [], selDate = null, selSlot = null, calY, calM;
 let clinicDoctorId = null;
 let availDays = new Set();   // fechas (YYYY-MM-DD) con horarios libres del mes visible
 let rutKnown = false;        // true si el RUT ingresado ya existe en la clínica
+let selEspecialista = null;  // especialista elegido para la reserva
 
 async function init() {
   const now = new Date(); calY = now.getFullYear(); calM = now.getMonth();
@@ -1468,39 +1483,56 @@ function renderCal() {
 function changeMonth(d) { calM+=d; if(calM<0){calM=11;calY--;} if(calM>11){calM=0;calY++;} loadMonthAvailability(); }
 
 async function pickDate(str) {
-  selDate = str; selSlot = null; renderCal();
+  selDate = str; selSlot = null; selEspecialista = null; renderCal();
   const dt = new Date(str+'T12:00:00');
   document.getElementById('sum-fecha').textContent = `${dt.getDate()} de ${MESES[dt.getMonth()]} ${dt.getFullYear()}`;
   document.getElementById('sum-hora').textContent = '—';
+  const se = document.getElementById('sum-esp'); if(se) se.textContent = '—';
   updateSteps(); await renderSlots(str);
 }
 
+const iniciales = n => String(n||'').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+
+// Muestra cada especialista con su avatar (izq) y sus horas disponibles (der)
 async function renderSlots(str) {
   const wrap = document.getElementById('slots-wrap');
   wrap.innerHTML = '<div class="slots-empty">Consultando horarios...</div>';
-  let libres = [];
+  let agenda = [];
   try {
-    const r = await fetch(`${API}/public/disponibilidad?fecha=${str}`);
-    if (r.ok) libres = (await r.json()).map(x => x.hora);
+    const r = await fetch(`${API}/public/agenda?fecha=${str}`);
+    if (r.ok) agenda = await r.json();
   } catch {}
   const dt = new Date(str+'T12:00:00');
   const lbl = `${dt.getDate()} de ${MESES[dt.getMonth()]}`;
-  if (!libres.length) {
+  if (!agenda.length) {
     wrap.innerHTML = `<div class="slots-empty">No hay horarios disponibles para el ${lbl}. Prueba otra fecha.</div>`;
     return;
   }
-  let html = `<div class="slots-lbl">${lbl} — ${libres.length} disponibles</div><div class="slots-grid">`;
-  libres.forEach(s => {
-    const sel2 = selSlot===s;
-    let cls = 'slot'; if(sel2) cls+=' ss';
-    html += `<button class="${cls}" onclick="pickSlot('${s}')">${s}</button>`;
+  let html = `<div class="slots-lbl">${lbl} — elige especialista y hora</div>`;
+  agenda.forEach(esp => {
+    const slotsHtml = esp.slots.map(s => {
+      const on = (selEspecialista===esp.id && selSlot===s.hora) ? ' ss' : '';
+      return `<button class="slot${on}" onclick="pickSlot(${esp.id},'${s.hora}','${(esp.name||'').replace(/'/g,'')}')">${s.hora}</button>`;
+    }).join('');
+    html += `
+      <div class="esp-card">
+        <div class="esp-side">
+          <div class="esp-av">${iniciales(esp.name)}</div>
+          <div class="esp-meta">
+            <div class="esp-name">${esp.name}</div>
+            <div class="esp-spec">${esp.especialidad||'Especialista'}</div>
+          </div>
+        </div>
+        <div class="esp-slots">${slotsHtml}</div>
+      </div>`;
   });
-  html += '</div>'; wrap.innerHTML = html;
+  wrap.innerHTML = html;
 }
 
-function pickSlot(s) {
-  selSlot = s;
-  document.getElementById('sum-hora').textContent = s;
+function pickSlot(especialistaId, hora, nombre) {
+  selEspecialista = especialistaId; selSlot = hora;
+  document.getElementById('sum-hora').textContent = hora;
+  const se = document.getElementById('sum-esp'); if(se) se.textContent = nombre || '—';
   updateSteps(); renderSlots(selDate);
 }
 function updateSummary() {
@@ -1549,7 +1581,7 @@ function onRutInput() {
 
 async function confirmarCita() {
   if(!selDate){showToast('⚠️ Selecciona una fecha');return;}
-  if(!selSlot){showToast('⚠️ Selecciona un horario');return;}
+  if(!selSlot||!selEspecialista){showToast('⚠️ Selecciona un especialista y horario');return;}
   const rut=document.getElementById('book-rut').value.trim();
   if(!rut || rut.replace(/[.\-\s]/g,'').length < 7){showToast('⚠️ Ingresa un RUT válido');return;}
   const nombre=(document.getElementById('book-nombre')?.value||'').trim();
@@ -1563,7 +1595,7 @@ async function confirmarCita() {
   btn.disabled=true; btn.innerHTML='⏳ Agendando...';
   try {
     const rc = await fetch(`${API}/public/citas`,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({rut,nombre,telefono:tel,email,fecha:selDate,hora:selSlot,tratamiento:trat,notas})});
+      body:JSON.stringify({rut,nombre,telefono:tel,email,especialista_id:selEspecialista,fecha:selDate,hora:selSlot,tratamiento:trat,notas})});
     if(rc.ok){
       const dt=new Date(selDate+'T12:00:00');
       document.getElementById('sdet').innerHTML=`📅 <strong>${dt.getDate()} de ${MESES[dt.getMonth()]} ${dt.getFullYear()}</strong><br>🕐 <strong>${selSlot} hrs</strong><br>💆 <strong>${trat||'Consulta general'}</strong>`;
@@ -1575,9 +1607,10 @@ async function confirmarCita() {
 
 function closeSuccess() {
   document.getElementById('sov').classList.remove('open');
-  selDate=null; selSlot=null; rutKnown=false;
+  selDate=null; selSlot=null; rutKnown=false; selEspecialista=null;
   document.getElementById('sum-fecha').textContent='—';
   document.getElementById('sum-hora').textContent='—';
+  const se=document.getElementById('sum-esp'); if(se) se.textContent='—';
   document.getElementById('sum-trat').textContent='—';
   // Limpiar formulario
   ['book-rut','book-nombre','book-tel','book-email','book-notas','book-trat'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});

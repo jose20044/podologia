@@ -33,6 +33,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       SETUP_TOKEN: ${SETUP_TOKEN}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrador}
       NODE_ENV: production
     ports:
       - "3001:3001"

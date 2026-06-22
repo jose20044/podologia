@@ -236,22 +236,11 @@
       <p>Sistema de Gestión Podológica</p>
       <p style="font-size:11px;margin-top:6px;color:var(--text3);">Acceso profesionales</p>
     </div>
-    <div class="login-tabs">
-      <button class="login-tab active" onclick="switchTab('login')">Iniciar sesión</button>
-      <button class="login-tab" onclick="switchTab('register')">Registrarse</button>
-    </div>
     <div id="login-message" class="login-message"></div>
     <div id="login-form" class="login-form active">
-      <div class="login-form-group"><label>Email</label><input type="email" id="login-email" placeholder="profesional@clinic.com"></div>
-      <div class="login-form-group"><label>Contraseña</label><input type="password" id="login-password" placeholder="••••••••"></div>
+      <div class="login-form-group"><label>Email</label><input type="email" id="login-email" placeholder="profesional@clinic.com" onkeydown="if(event.key==='Enter')handleLogin()"></div>
+      <div class="login-form-group"><label>Contraseña</label><input type="password" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')handleLogin()"></div>
       <button class="login-btn" onclick="handleLogin()">Iniciar sesión</button>
-    </div>
-    <div id="register-form" class="login-form">
-      <div class="login-form-group"><label>Nombre completo</label><input type="text" id="register-name" placeholder="Dr/Dra. Nombre Apellido"></div>
-      <div class="login-form-group"><label>Email</label><input type="email" id="register-email" placeholder="profesional@clinic.com"></div>
-      <div class="login-form-group"><label>Contraseña</label><input type="password" id="register-password" placeholder="Mínimo 6 caracteres"></div>
-      <div class="login-form-group"><label>Confirmar contraseña</label><input type="password" id="register-confirm" placeholder="Repite la contraseña"></div>
-      <button class="login-btn" onclick="handleRegister()">Crear cuenta</button>
     </div>
     <div style="text-align:center;margin-top:16px;">
       <a href="/pacientes" style="font-size:12px;color:var(--text3);text-decoration:none;">← Portal de Pacientes</a>
@@ -279,6 +268,10 @@
     <div class="nav-item" onclick="navigate('disponibilidad',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       Disponibilizar Agenda
+    </div>
+    <div class="nav-item admin-only" id="nav-especialistas" onclick="navigate('especialistas',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+      Especialistas
     </div>
     <div class="nav-item" onclick="navigate('pacientes',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -425,6 +418,18 @@
       </div>
     </div>
 
+    <!-- ESPECIALISTAS (solo admin) -->
+    <div class="page" id="page-especialistas">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2 style="font-family:'Playfair Display',serif;font-size:22px;">Especialistas</h2>
+          <p style="font-size:13px;color:var(--text2);margin-top:4px;">Gestiona los profesionales de la clínica.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('modal-especialista')">+ Nuevo especialista</button>
+      </div>
+      <div id="especialistas-list" class="patient-grid"></div>
+    </div>
+
     <!-- DISPONIBILIZAR AGENDA -->
     <div class="page" id="page-disponibilidad">
       <div style="margin-bottom:20px;">
@@ -435,6 +440,10 @@
         <!-- Generador -->
         <div class="card" style="padding:20px;">
           <h3 style="font-size:15px;margin-bottom:16px;">⚡ Generador rápido</h3>
+          <div class="form-group admin-only" id="disp-esp-wrap" style="margin-bottom:12px;">
+            <label>Especialista</label>
+            <select class="input" id="disp-especialista" onchange="loadDisponibilidad()"><option value="">Selecciona...</option></select>
+          </div>
           <div class="form-group" style="margin-bottom:12px;"><label>Fecha</label><input class="input" id="disp-fecha" type="date"></div>
           <div style="display:flex;gap:10px;margin-bottom:12px;">
             <div class="form-group" style="flex:1;"><label>Desde</label><input class="input" id="disp-inicio" type="time" value="09:00"></div>
@@ -494,12 +503,16 @@
       <!-- Buscar paciente en historial -->
       <div class="card" style="margin-bottom:20px;padding:16px 20px;">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-          <span style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap;">Ver historial de:</span>
-          <select class="input" id="historial-paciente-selector" style="flex:1;min-width:200px;max-width:360px;" onchange="seleccionarPacienteHistorial(this.value)">
+          <span style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap;">Buscar por RUT:</span>
+          <input class="input" id="historial-rut-search" style="flex:1;min-width:160px;max-width:220px;" placeholder="12.345.678-9" onkeydown="if(event.key==='Enter')buscarHistorialPorRut()">
+          <button class="btn btn-primary btn-sm" onclick="buscarHistorialPorRut()">🔍 Buscar</button>
+          <span style="font-size:13px;font-weight:600;color:var(--text2);white-space:nowrap;">o elige:</span>
+          <select class="input" id="historial-paciente-selector" style="flex:1;min-width:200px;max-width:320px;" onchange="seleccionarPacienteHistorial(this.value)">
             <option value="">— Seleccionar paciente —</option>
           </select>
           <button class="btn btn-outline btn-sm" onclick="cargarPacientesParaHistorial()">↺ Actualizar</button>
         </div>
+        <div id="historial-rut-msg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
       </div>
 
       <div style="display:grid;grid-template-columns:280px 1fr;gap:20px;">
@@ -590,6 +603,28 @@
       <div class="form-actions">
         <button class="btn btn-outline" onclick="closeModal('modal-cita')">Cancelar</button>
         <button class="btn btn-primary" onclick="saveCita()">Agendar cita</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUEVO ESPECIALISTA (solo admin) -->
+<div class="modal-overlay" id="modal-especialista">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🩺 Nuevo Especialista</h2>
+      <button class="modal-close" onclick="closeModal('modal-especialista')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>Nombre *</label><input class="input" id="esp-nombre" type="text" placeholder="Dr/Dra. Nombre Apellido"></div>
+        <div class="form-group"><label>Especialidad</label><input class="input" id="esp-especialidad" type="text" placeholder="Ej: Podología clínica"></div>
+        <div class="form-group"><label>Email *</label><input class="input" id="esp-email" type="email" placeholder="profesional@clinic.com"></div>
+        <div class="form-group"><label>Contraseña * (mín. 6)</label><input class="input" id="esp-password" type="password" placeholder="••••••••"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="closeModal('modal-especialista')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveEspecialista()">Crear especialista</button>
       </div>
     </div>
   </div>
@@ -798,14 +833,6 @@
   initTheme();
 
   // ========== AUTH ==========
-  function switchTab(tab) {
-    document.querySelectorAll('.login-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.login-form').forEach(f => f.classList.remove('active'));
-    document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
-    document.getElementById(tab + '-form').classList.add('active');
-    document.getElementById('login-message').className = 'login-message';
-  }
-
   function showLoginMsg(msg, isErr=false) {
     const el = document.getElementById('login-message');
     el.textContent = msg;
@@ -830,22 +857,6 @@
     } catch(e) { showLoginMsg('❌ Error de conexión: ' + e.message, true); }
   }
 
-  async function handleRegister() {
-    const name = document.getElementById('register-name').value;
-    const email = document.getElementById('register-email').value;
-    const password = document.getElementById('register-password').value;
-    const confirm = document.getElementById('register-confirm').value;
-    if (!name||!email||!password||!confirm) { showLoginMsg('⚠️ Completa todos los campos', true); return; }
-    if (password !== confirm) { showLoginMsg('⚠️ Las contraseñas no coinciden', true); return; }
-    if (password.length < 6) { showLoginMsg('⚠️ Contraseña mínimo 6 caracteres', true); return; }
-    try {
-      const res = await fetch(API_URL + '/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, email, password}) });
-      const data = await res.json();
-      if (res.ok && data.success) { showLoginMsg('✅ Cuenta creada. Inicia sesión.'); switchTab('login'); }
-      else showLoginMsg('❌ ' + (data.error || 'Error en registro'), true);
-    } catch(e) { showLoginMsg('❌ ' + e.message, true); }
-  }
-
   function mostrarApp() {
     document.getElementById('login-page').classList.add('hidden');
     document.getElementById('app-page').style.display = 'flex';
@@ -860,16 +871,91 @@
   }
 
   // ========== INIT APP ==========
+  let especialistas = [];
+  const esAdmin = () => currentUser && currentUser.role === 'admin';
+
   async function initApp() {
     document.getElementById('user-name').textContent = currentUser.name;
     document.getElementById('user-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
     document.getElementById('page-date').textContent = new Date().toLocaleDateString('es-CL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+    await applyRoleUI();
     await cargarPacientes();
     await cargarTratamientos();
     await cargarCitas();
     generarNotificaciones();
     renderCalendario();
     cargarCitasDelDia(fechaAgendaSeleccionada);
+  }
+
+  // Muestra/oculta elementos según el rol y prepara datos de especialistas
+  async function applyRoleUI() {
+    const admin = esAdmin();
+    document.querySelectorAll('.admin-only').forEach(el => { el.style.display = admin ? '' : 'none'; });
+    // Etiqueta de rol junto al nombre
+    const badge = document.getElementById('user-name');
+    if (badge) badge.title = admin ? 'Administrador' : (currentUser.especialidad || 'Especialista');
+    if (admin) {
+      await cargarEspecialistas();
+      const sel = document.getElementById('disp-especialista');
+      if (sel) sel.innerHTML = '<option value="">Selecciona...</option>' +
+        especialistas.map(e => `<option value="${e.id}">${e.name}${e.especialidad?' — '+e.especialidad:''}</option>`).join('');
+    }
+  }
+
+  // ========== ESPECIALISTAS (solo admin) ==========
+  async function cargarEspecialistas() {
+    try {
+      const res = await fetch(API_URL+'/especialistas', { headers:{'Authorization':'Bearer '+authToken} });
+      especialistas = res.ok ? await res.json() : [];
+    } catch { especialistas = []; }
+    renderEspecialistas();
+  }
+
+  function renderEspecialistas() {
+    const cont = document.getElementById('especialistas-list');
+    if (!cont) return;
+    if (!especialistas.length) { cont.innerHTML = '<div style="color:var(--text3);">Sin especialistas aún.</div>'; return; }
+    cont.innerHTML = especialistas.map(e => {
+      const ini = e.name.split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+      const estado = e.activo ? '<span style="color:var(--accent);font-size:12px;">● Activo</span>' : '<span style="color:var(--text3);font-size:12px;">○ Inactivo</span>';
+      return `<div class="card" style="padding:16px;display:flex;gap:14px;align-items:center;">
+        <div style="width:46px;height:46px;border-radius:50%;background:var(--accent);color:#062b23;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${ini}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;">${e.name}</div>
+          <div style="font-size:12px;color:var(--text2);">${e.especialidad||'—'}</div>
+          <div style="font-size:12px;color:var(--text3);">${e.email} · ${estado}</div>
+        </div>
+        <button class="btn btn-outline" style="padding:6px 10px;font-size:12px;" onclick="resetPassEspecialista(${e.id},'${e.name.replace(/'/g,"")}')">🔑 Clave</button>
+      </div>`;
+    }).join('');
+  }
+
+  async function saveEspecialista() {
+    const name = document.getElementById('esp-nombre').value.trim();
+    const especialidad = document.getElementById('esp-especialidad').value.trim();
+    const email = document.getElementById('esp-email').value.trim();
+    const password = document.getElementById('esp-password').value;
+    if (!name || !email || !password) { showToast('⚠️ Nombre, email y contraseña son obligatorios','error'); return; }
+    try {
+      const res = await fetch(API_URL+'/especialistas', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body:JSON.stringify({name,email,password,especialidad}) });
+      const d = await res.json();
+      if (res.ok) {
+        showToast('✅ Especialista creado');
+        closeModal('modal-especialista');
+        ['esp-nombre','esp-especialidad','esp-email','esp-password'].forEach(id=>document.getElementById(id).value='');
+        await applyRoleUI();
+      } else showToast('❌ '+(d.error||'Error'),'error');
+    } catch { showToast('❌ Sin conexión','error'); }
+  }
+
+  async function resetPassEspecialista(id, nombre) {
+    const nueva = prompt('Nueva contraseña para '+nombre+' (mín. 6 caracteres):');
+    if (!nueva) return;
+    if (nueva.length < 6) { showToast('⚠️ Mínimo 6 caracteres','error'); return; }
+    try {
+      const res = await fetch(API_URL+'/especialistas/'+id, { method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body:JSON.stringify({password:nueva}) });
+      if (res.ok) showToast('✅ Contraseña actualizada'); else { const d=await res.json(); showToast('❌ '+(d.error||'Error'),'error'); }
+    } catch { showToast('❌ Sin conexión','error'); }
   }
 
   // ========== PACIENTES ==========
@@ -1156,6 +1242,20 @@
     await verPaciente(parseInt(id));
   }
 
+  // Busca un paciente por RUT y abre su historial
+  function buscarHistorialPorRut() {
+    const msg = document.getElementById('historial-rut-msg');
+    const norm = s => String(s||'').replace(/[.\-\s]/g,'').toLowerCase();
+    const q = norm(document.getElementById('historial-rut-search').value);
+    if (q.length < 7) { msg.textContent='Ingresa un RUT válido'; msg.style.color='var(--danger)'; return; }
+    const p = pacientes.find(x => norm(x.rut) === q);
+    if (!p) { msg.textContent='No se encontró un paciente con ese RUT'; msg.style.color='var(--danger)'; return; }
+    msg.textContent = '✓ '+p.nombre; msg.style.color='var(--accent)';
+    const sel = document.getElementById('historial-paciente-selector');
+    if (sel) sel.value = p.id;
+    seleccionarPacienteHistorial(p.id);
+  }
+
   async function saveHistorial() {
     // Legacy function - redirect to new one
     await saveHistorialProfesional();
@@ -1403,7 +1503,7 @@
   }
 
   // ========== NAV ==========
-  const TITLES = {dashboard:'Dashboard',agenda:'Agenda / Citas',disponibilidad:'Disponibilizar Agenda',pacientes:'Pacientes',historial:'Historial Clínico',notificaciones:'Notificaciones',tratamientos:'Tratamientos'};
+  const TITLES = {dashboard:'Dashboard',agenda:'Agenda / Citas',disponibilidad:'Disponibilizar Agenda',especialistas:'Especialistas',pacientes:'Pacientes',historial:'Historial Clínico',notificaciones:'Notificaciones',tratamientos:'Tratamientos'};
   function navigate(page, el) {
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -1412,6 +1512,7 @@
     document.getElementById('page-title').textContent = TITLES[page]||page;
     if(page==='agenda'){renderCalendario();cargarCitasDelDia(fechaAgendaSeleccionada);}
     if(page==='disponibilidad') initDisponibilidad();
+    if(page==='especialistas') cargarEspecialistas();
     if(page==='notificaciones') renderNotificaciones();
   }
 
@@ -1459,9 +1560,16 @@
     const list = document.getElementById('disp-list');
     const count = document.getElementById('disp-count');
     if (!fecha) return;
+    // El admin debe elegir especialista; el especialista usa el suyo (backend)
+    let espParam = '';
+    if (esAdmin()) {
+      const eid = document.getElementById('disp-especialista').value;
+      if (!eid) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;padding:16px 0;text-align:center;">Selecciona un especialista.</div>'; count.textContent=''; return; }
+      espParam = '&especialista_id=' + eid;
+    }
     list.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1;">Cargando...</div>';
     try {
-      const res = await fetch(API_URL+'/disponibilidad?fecha='+fecha, { headers:{'Authorization':'Bearer '+authToken} });
+      const res = await fetch(API_URL+'/disponibilidad?fecha='+fecha+espParam, { headers:{'Authorization':'Bearer '+authToken} });
       const slots = res.ok ? await res.json() : [];
       const libres = slots.filter(s=>s.estado==='libre').length;
       count.textContent = `${slots.length} horario(s) · ${libres} libre(s)`;
@@ -1485,10 +1593,16 @@
     const fin = document.getElementById('disp-fin').value;
     const intervalo = document.getElementById('disp-intervalo').value;
     if (!fecha || !inicio || !fin) { showToast('Completa fecha, inicio y fin', 'error'); return; }
+    const payload = { fecha, inicio, fin, intervalo, duracion: intervalo };
+    if (esAdmin()) {
+      const eid = document.getElementById('disp-especialista').value;
+      if (!eid) { showToast('Selecciona un especialista', 'error'); return; }
+      payload.especialista_id = eid;
+    }
     try {
       const res = await fetch(API_URL+'/disponibilidad/generar', {
         method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
-        body: JSON.stringify({ fecha, inicio, fin, intervalo, duracion: intervalo })
+        body: JSON.stringify(payload)
       });
       const d = await res.json();
       if (res.ok) { showToast('✅ '+d.message); loadDisponibilidad(); }

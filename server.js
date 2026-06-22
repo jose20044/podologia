@@ -176,6 +176,8 @@ async function initDatabase() {
         email VARCHAR(100) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         role VARCHAR(20) DEFAULT 'doctor',
+        especialidad VARCHAR(100) DEFAULT '',
+        activo BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -231,13 +233,14 @@ async function initDatabase() {
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS disponibilidad (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL DEFAULT 0,
         fecha DATE NOT NULL,
         hora TIME NOT NULL,
         duracion INT DEFAULT 30,
         estado VARCHAR(20) DEFAULT 'libre',
         cita_id INT DEFAULT NULL,
         creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_slot (fecha, hora),
+        UNIQUE KEY uq_slot (user_id, fecha, hora),
         INDEX idx_disp_fecha (fecha)
       )
     `);
@@ -276,11 +279,78 @@ async function initDatabase() {
       console.log('✅ Tratamientos insertados');
     }
 
+    // ── MIGRACIÓN idempotente para BD ya existentes ──
+    await migrateSchema(conn);
+
+    // ── SEED del ADMIN desde variables de entorno ──
+    await seedAdmin(conn);
+
     conn.release();
     console.log('✅ Base de datos lista');
   } catch (err) {
     console.error('❌ Error BD:', err.message);
     throw err;
+  }
+}
+
+// Comprueba si una columna existe (MySQL no soporta ADD COLUMN IF NOT EXISTS)
+async function columnExists(conn, table, column) {
+  const [rows] = await conn.execute(
+    `SELECT 1 FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1`,
+    [table, column]
+  );
+  return rows.length > 0;
+}
+async function indexExists(conn, table, index) {
+  const [rows] = await conn.execute(
+    `SELECT 1 FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1`,
+    [table, index]
+  );
+  return rows.length > 0;
+}
+
+// Lleva una BD antigua al esquema multi-especialista sin perder datos
+async function migrateSchema(conn) {
+  // users.especialidad / users.activo
+  if (!await columnExists(conn, 'users', 'especialidad'))
+    await conn.query("ALTER TABLE users ADD COLUMN especialidad VARCHAR(100) DEFAULT ''");
+  if (!await columnExists(conn, 'users', 'activo'))
+    await conn.query('ALTER TABLE users ADD COLUMN activo BOOLEAN DEFAULT TRUE');
+
+  // disponibilidad.user_id + unique key por especialista
+  if (!await columnExists(conn, 'disponibilidad', 'user_id')) {
+    await conn.query('ALTER TABLE disponibilidad ADD COLUMN user_id INT NOT NULL DEFAULT 0');
+    // Backfill: asignar los horarios existentes al primer doctor/especialista
+    const [docs] = await conn.execute("SELECT id FROM users WHERE role IN ('doctor','admin') ORDER BY id LIMIT 1");
+    if (docs.length) await conn.execute('UPDATE disponibilidad SET user_id = ? WHERE user_id = 0', [docs[0].id]);
+    // Rehacer la clave única para que sea por (user_id, fecha, hora)
+    if (await indexExists(conn, 'disponibilidad', 'uq_slot')) await conn.query('ALTER TABLE disponibilidad DROP INDEX uq_slot');
+    await conn.query('ALTER TABLE disponibilidad ADD UNIQUE KEY uq_slot (user_id, fecha, hora)');
+    console.log('🔧 disponibilidad migrada a multi-especialista');
+  }
+}
+
+// Crea/actualiza la cuenta de administrador a partir de ADMIN_EMAIL/ADMIN_PASSWORD
+async function seedAdmin(conn) {
+  const email = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+  const password = process.env.ADMIN_PASSWORD || '';
+  const name = process.env.ADMIN_NAME || 'Administrador';
+  if (!email || !password) {
+    console.warn('ℹ️  ADMIN_EMAIL/ADMIN_PASSWORD no definidos: no se creó admin automático.');
+    return;
+  }
+  if (!EMAIL_RE.test(email)) { console.warn('⚠️  ADMIN_EMAIL inválido, se omite seed de admin.'); return; }
+  const hash = await bcrypt.hash(password, 10);
+  const [rows] = await conn.execute('SELECT id, role FROM users WHERE email = ?', [email]);
+  if (rows.length) {
+    // Mantener su contraseña sincronizada con la env y asegurar rol admin
+    await conn.execute("UPDATE users SET password = ?, role = 'admin', name = ? WHERE id = ?", [hash, name, rows[0].id]);
+    console.log(`✅ Admin actualizado (${email})`);
+  } else {
+    await conn.execute("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'admin')", [name, email, hash]);
+    console.log(`✅ Admin creado (${email})`);
   }
 }
 
@@ -318,6 +388,9 @@ const requireRole = (...roles) => (req, res, next) => {
 
 // Solo médicos/admin: verifica token Y rol
 const verifyDoctor = [verifyToken, requireRole('doctor', 'admin')];
+
+// Solo administrador
+const verifyAdmin = [verifyToken, requireRole('admin')];
 
 // ──────────────────────────────────────────
 // RUTAS DE AUTENTICACIÓN
@@ -393,37 +466,61 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 // RUTAS PÚBLICAS (sin login) — agendamiento de pacientes
 // ──────────────────────────────────────────
 
+// Lista pública de especialistas activos
+app.get('/api/public/especialistas', publicLimiter, async (req, res) => {
+  try {
+    const conn = await pool.getConnection();
+    const [rows] = await conn.execute(
+      "SELECT id, name, especialidad FROM users WHERE role = 'doctor' AND activo = 1 ORDER BY name"
+    );
+    conn.release();
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Fechas (del rango/mes) que tienen al menos un horario libre — para el calendario
 app.get('/api/public/dias-disponibles', publicLimiter, async (req, res) => {
   try {
-    const { desde, hasta } = req.query;
+    const { desde, hasta, especialista } = req.query;
     const conn = await pool.getConnection();
     let q = "SELECT DISTINCT fecha FROM disponibilidad WHERE estado = 'libre' AND fecha >= CURDATE()";
     const params = [];
+    if (especialista) { q += ' AND user_id = ?'; params.push(especialista); }
     if (desde) { q += ' AND fecha >= ?'; params.push(desde); }
     if (hasta) { q += ' AND fecha <= ?'; params.push(hasta); }
     q += ' ORDER BY fecha';
     const [rows] = await conn.execute(q, params);
     conn.release();
-    // Devuelve fechas en formato YYYY-MM-DD
     res.json(rows.map(r => (r.fecha instanceof Date ? r.fecha.toISOString().slice(0, 10) : String(r.fecha).slice(0, 10))));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Horarios LIBRES de una fecha concreta
-app.get('/api/public/disponibilidad', publicLimiter, async (req, res) => {
+// Agenda de una fecha: cada especialista con sus horarios libres
+app.get('/api/public/agenda', publicLimiter, async (req, res) => {
   try {
     const { fecha } = req.query;
     if (!fecha) return res.status(400).json({ error: 'Fecha requerida' });
     const conn = await pool.getConnection();
     const [rows] = await conn.execute(
-      "SELECT hora, duracion FROM disponibilidad WHERE fecha = ? AND estado = 'libre' ORDER BY hora",
+      `SELECT d.user_id, u.name, u.especialidad, d.hora, d.duracion
+       FROM disponibilidad d
+       JOIN users u ON d.user_id = u.id
+       WHERE d.fecha = ? AND d.estado = 'libre' AND u.role = 'doctor' AND u.activo = 1
+       ORDER BY u.name, d.hora`,
       [fecha]
     );
     conn.release();
-    res.json(rows.map(r => ({ hora: String(r.hora).slice(0, 5), duracion: r.duracion })));
+    // Agrupar por especialista
+    const map = new Map();
+    for (const r of rows) {
+      if (!map.has(r.user_id)) map.set(r.user_id, { id: r.user_id, name: r.name, especialidad: r.especialidad, slots: [] });
+      map.get(r.user_id).slots.push({ hora: String(r.hora).slice(0, 5), duracion: r.duracion });
+    }
+    res.json([...map.values()]);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -458,17 +555,18 @@ app.post('/api/public/citas', publicLimiter, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const { rut, nombre, telefono, email, fecha, hora, tratamiento, notas } = req.body;
-    if (!rut || !fecha || !hora) return res.status(400).json({ error: 'RUT, fecha y hora son requeridos' });
+    const especialistaId = parseInt(req.body.especialista_id);
+    if (!rut || !fecha || !hora || !especialistaId) return res.status(400).json({ error: 'RUT, especialista, fecha y hora son requeridos' });
     const rutNorm = normalizeRut(rut);
     if (rutNorm.length < 7) return res.status(400).json({ error: 'RUT inválido' });
     if (email && !EMAIL_RE.test(String(email))) return res.status(400).json({ error: 'Email inválido' });
 
     await conn.beginTransaction();
 
-    // 1) El horario debe existir y estar libre (bloqueo para evitar doble reserva)
+    // 1) El horario del especialista debe existir y estar libre (bloqueo anti doble reserva)
     const [slots] = await conn.execute(
-      "SELECT id, duracion FROM disponibilidad WHERE fecha = ? AND hora = ? AND estado = 'libre' FOR UPDATE",
-      [fecha, hora]
+      "SELECT id, duracion FROM disponibilidad WHERE user_id = ? AND fecha = ? AND hora = ? AND estado = 'libre' FOR UPDATE",
+      [especialistaId, fecha, hora]
     );
     if (!slots.length) {
       await conn.rollback(); conn.release();
@@ -486,24 +584,19 @@ app.post('/api/public/citas', publicLimiter, async (req, res) => {
       pacienteId = pac[0].id;
     } else {
       if (!nombre) { await conn.rollback(); conn.release(); return res.status(400).json({ error: 'Nombre requerido para nuevo paciente' }); }
-      // Owner = primer doctor de la clínica (para que todos los médicos lo vean)
-      const [docs] = await conn.execute("SELECT id FROM users WHERE role = 'doctor' ORDER BY id LIMIT 1");
-      const ownerId = docs.length ? docs[0].id : 1;
       const [ins] = await conn.execute(
         `INSERT INTO pacientes (user_id, nombre, rut, email, telefono, estado, fecha_registro)
          VALUES (?, ?, ?, ?, ?, 'Activo', NOW())`,
-        [ownerId, String(nombre).trim(), String(rut).trim(), email || '', telefono || '']
+        [especialistaId, String(nombre).trim(), String(rut).trim(), email || '', telefono || '']
       );
       pacienteId = ins.insertId;
     }
 
-    // 3) Crear la cita (queda Pendiente de confirmación por el médico)
-    const [docs2] = await conn.execute("SELECT id FROM users WHERE role = 'doctor' ORDER BY id LIMIT 1");
-    const ownerCita = docs2.length ? docs2[0].id : 1;
+    // 3) Crear la cita asignada al especialista elegido (Pendiente de confirmación)
     const [citaIns] = await conn.execute(
       `INSERT INTO citas (user_id, paciente_id, fecha, hora, duracion, tratamiento, notas, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'Pendiente')`,
-      [ownerCita, pacienteId, fecha, hora, slot.duracion || 30, tratamiento || '', notas || '']
+      [especialistaId, pacienteId, fecha, hora, slot.duracion || 30, tratamiento || '', notas || '']
     );
 
     // 4) Marcar el horario como reservado
@@ -663,9 +756,21 @@ app.post('/api/pacientes/:id/cuenta', verifyDoctor, async (req, res) => {
 // RUTAS DE DISPONIBILIDAD (admin) — disponibilizar agenda
 // ──────────────────────────────────────────
 
+// Resuelve a qué especialista pertenece la operación de disponibilidad.
+// Un especialista (doctor) siempre opera sobre sí mismo; el admin debe indicar
+// especialista_id (en body o query).
+function resolveEspecialista(req) {
+  if (req.userRole === 'doctor') return req.userId;
+  const raw = req.body?.especialista_id ?? req.query?.especialista_id;
+  const id = parseInt(raw);
+  return id || null;
+}
+
 // Generador rápido: crea slots para una fecha entre inicio y fin cada N minutos
 app.post('/api/disponibilidad/generar', verifyDoctor, async (req, res) => {
   try {
+    const ownerId = resolveEspecialista(req);
+    if (!ownerId) return res.status(400).json({ error: 'Selecciona un especialista' });
     const { fecha, inicio, fin, intervalo, duracion } = req.body;
     if (!fecha || !inicio || !fin) return res.status(400).json({ error: 'Fecha, inicio y fin son requeridos' });
     const step = parseInt(intervalo) || 30;
@@ -681,10 +786,10 @@ app.post('/api/disponibilidad/generar', verifyDoctor, async (req, res) => {
     let creados = 0;
     for (let m = start; m < end; m += step) {
       const hora = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:00`;
-      // INSERT IGNORE para no duplicar (UNIQUE fecha+hora)
+      // INSERT IGNORE para no duplicar (UNIQUE user_id+fecha+hora)
       const [r] = await conn.execute(
-        "INSERT IGNORE INTO disponibilidad (fecha, hora, duracion, estado) VALUES (?, ?, ?, 'libre')",
-        [fecha, hora, dur]
+        "INSERT IGNORE INTO disponibilidad (user_id, fecha, hora, duracion, estado) VALUES (?, ?, ?, ?, 'libre')",
+        [ownerId, fecha, hora, dur]
       );
       if (r.affectedRows) creados++;
     }
@@ -701,14 +806,20 @@ app.get('/api/disponibilidad', verifyDoctor, async (req, res) => {
     const { fecha } = req.query;
     if (!fecha) return res.status(400).json({ error: 'Fecha requerida' });
     const conn = await pool.getConnection();
+    // doctor → solo sus horarios; admin → todos (o filtrado por especialista_id)
+    const params = [fecha];
+    let where = 'd.fecha = ?';
+    if (req.userRole === 'doctor') { where += ' AND d.user_id = ?'; params.push(req.userId); }
+    else if (req.query.especialista_id) { where += ' AND d.user_id = ?'; params.push(parseInt(req.query.especialista_id)); }
     const [rows] = await conn.execute(
-      `SELECT d.id, d.hora, d.duracion, d.estado, d.cita_id,
+      `SELECT d.id, d.user_id, u.name AS especialista_nombre, d.hora, d.duracion, d.estado, d.cita_id,
               p.nombre AS paciente_nombre
        FROM disponibilidad d
+       JOIN users u ON d.user_id = u.id
        LEFT JOIN citas c ON d.cita_id = c.id
        LEFT JOIN pacientes p ON c.paciente_id = p.id
-       WHERE d.fecha = ? ORDER BY d.hora`,
-      [fecha]
+       WHERE ${where} ORDER BY u.name, d.hora`,
+      params
     );
     conn.release();
     res.json(rows.map(r => ({ ...r, hora: String(r.hora).slice(0, 5) })));
@@ -717,14 +828,84 @@ app.get('/api/disponibilidad', verifyDoctor, async (req, res) => {
   }
 });
 
-// Eliminar un slot (solo si está libre)
+// Eliminar un slot (solo si está libre; el doctor solo los suyos)
 app.delete('/api/disponibilidad/:id', verifyDoctor, async (req, res) => {
   try {
     const conn = await pool.getConnection();
-    const [r] = await conn.execute("DELETE FROM disponibilidad WHERE id = ? AND estado = 'libre'", [req.params.id]);
+    let q = "DELETE FROM disponibilidad WHERE id = ? AND estado = 'libre'";
+    const params = [req.params.id];
+    if (req.userRole === 'doctor') { q += ' AND user_id = ?'; params.push(req.userId); }
+    const [r] = await conn.execute(q, params);
     conn.release();
-    if (!r.affectedRows) return res.status(409).json({ error: 'No se puede borrar: el horario está reservado' });
+    if (!r.affectedRows) return res.status(409).json({ error: 'No se puede borrar: reservado o no es tuyo' });
     res.json({ success: true, message: 'Horario eliminado' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ──────────────────────────────────────────
+// RUTAS DE ESPECIALISTAS (gestión)
+// ──────────────────────────────────────────
+
+// Listar especialistas — disponible para admin y especialistas (selectores)
+app.get('/api/especialistas', verifyDoctor, async (req, res) => {
+  try {
+    const conn = await pool.getConnection();
+    const [rows] = await conn.execute(
+      "SELECT id, name, email, especialidad, activo FROM users WHERE role = 'doctor' ORDER BY name"
+    );
+    conn.release();
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Crear especialista — SOLO admin
+app.post('/api/especialistas', verifyAdmin, async (req, res) => {
+  try {
+    const { name, email, password, especialidad } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: 'Nombre, email y contraseña requeridos' });
+    if (String(password).length < 6) return res.status(400).json({ error: 'Contraseña mínimo 6 caracteres' });
+    if (!EMAIL_RE.test(String(email))) return res.status(400).json({ error: 'Email inválido' });
+
+    const conn = await pool.getConnection();
+    const [exist] = await conn.execute('SELECT id FROM users WHERE email = ?', [email.toLowerCase().trim()]);
+    if (exist.length) { conn.release(); return res.status(400).json({ error: 'El email ya está registrado' }); }
+    const hash = await bcrypt.hash(String(password), 10);
+    const [r] = await conn.execute(
+      "INSERT INTO users (name, email, password, role, especialidad) VALUES (?, ?, ?, 'doctor', ?)",
+      [String(name).trim(), email.toLowerCase().trim(), hash, especialidad || '']
+    );
+    conn.release();
+    res.json({ success: true, id: r.insertId, message: 'Especialista creado' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Editar especialista (nombre, especialidad, activo, opcional password) — SOLO admin
+app.put('/api/especialistas/:id', verifyAdmin, async (req, res) => {
+  try {
+    const { name, especialidad, activo, password } = req.body;
+    const conn = await pool.getConnection();
+    const [docs] = await conn.execute("SELECT id FROM users WHERE id = ? AND role = 'doctor'", [req.params.id]);
+    if (!docs.length) { conn.release(); return res.status(404).json({ error: 'Especialista no encontrado' }); }
+
+    const fields = [], values = [];
+    if (name !== undefined)         { fields.push('name = ?');         values.push(String(name).trim()); }
+    if (especialidad !== undefined) { fields.push('especialidad = ?'); values.push(especialidad || ''); }
+    if (activo !== undefined)       { fields.push('activo = ?');       values.push(activo ? 1 : 0); }
+    if (password) {
+      if (String(password).length < 6) { conn.release(); return res.status(400).json({ error: 'Contraseña mínimo 6 caracteres' }); }
+      fields.push('password = ?'); values.push(await bcrypt.hash(String(password), 10));
+    }
+    if (!fields.length) { conn.release(); return res.status(400).json({ error: 'Sin cambios' }); }
+    values.push(req.params.id);
+    await conn.execute(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, values);
+    conn.release();
+    res.json({ success: true, message: 'Especialista actualizado' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -773,23 +954,29 @@ app.post('/api/historial', verifyToken, async (req, res) => {
 // RUTAS DE CITAS
 // ──────────────────────────────────────────
 
-// GET citas — doctor/admin ve TODAS las citas de la clínica; paciente ve las propias
+// GET citas — admin ve TODAS; especialista ve solo las suyas; paciente las propias
 app.get('/api/citas', verifyToken, async (req, res) => {
   try {
     const { fecha } = req.query;
     const conn = await pool.getConnection();
     const params = [];
-    let query = `SELECT c.*, p.nombre AS paciente_nombre, p.rut AS paciente_rut, p.telefono AS paciente_telefono
+    let query = `SELECT c.*, p.nombre AS paciente_nombre, p.rut AS paciente_rut, p.telefono AS paciente_telefono,
+                        u.name AS especialista_nombre
                  FROM citas c
                  JOIN pacientes p ON c.paciente_id = p.id
+                 LEFT JOIN users u ON c.user_id = u.id
                  WHERE 1=1`;
 
     if (req.userRole === 'patient') {
       // Paciente: ver solo sus propias citas por email
       query += ' AND p.email = (SELECT email FROM users WHERE id = ?)';
       params.push(req.userId);
+    } else if (req.userRole === 'doctor') {
+      // Especialista: solo sus propias citas
+      query += ' AND c.user_id = ?';
+      params.push(req.userId);
     }
-    // Doctores y admin ven todas las citas sin filtro adicional
+    // Admin: ve todas (sin filtro adicional)
 
     if (fecha) { query += ' AND c.fecha = ?'; params.push(fecha); }
     query += ' ORDER BY c.fecha DESC, c.hora';
@@ -943,10 +1130,19 @@ app.get('/api/stats', verifyDoctor, async (req, res) => {
       "SELECT COUNT(*) AS seguimientos FROM pacientes WHERE estado = 'Seguimiento'"
     );
     const today = new Date().toISOString().split('T')[0];
-    const [[{ citasHoy }]] = await conn.execute(
-      "SELECT COUNT(*) AS citasHoy FROM citas WHERE fecha = ? AND estado != 'Cancelada'",
-      [today]
-    );
+    // Especialista: solo sus citas de hoy; admin: toda la clínica
+    let citasHoy;
+    if (req.userRole === 'doctor') {
+      [[{ citasHoy }]] = await conn.execute(
+        "SELECT COUNT(*) AS citasHoy FROM citas WHERE fecha = ? AND estado != 'Cancelada' AND user_id = ?",
+        [today, req.userId]
+      );
+    } else {
+      [[{ citasHoy }]] = await conn.execute(
+        "SELECT COUNT(*) AS citasHoy FROM citas WHERE fecha = ? AND estado != 'Cancelada'",
+        [today]
+      );
+    }
     conn.release();
     res.json({ totalPacientes, totalHistorial, activos, seguimientos, citasHoy });
   } catch (e) {
