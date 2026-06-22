@@ -1630,10 +1630,21 @@
   }
 
   // ========== DISPONIBILIDAD (disponibilizar agenda) ==========
-  function initDisponibilidad() {
+  async function initDisponibilidad() {
     const f = document.getElementById('disp-fecha');
     if (!f.value) f.value = new Date().toISOString().split('T')[0];
     f.onchange = loadDisponibilidad;
+    // El admin elige especialista: rellenar el selector con datos frescos
+    if (esAdmin()) {
+      const sel = document.getElementById('disp-especialista');
+      const prev = sel ? sel.value : '';
+      await cargarEspecialistas();
+      if (sel) {
+        sel.innerHTML = '<option value="">Selecciona un especialista...</option>' +
+          especialistas.map(e => `<option value="${e.id}">${e.name}${e.especialidad?' — '+e.especialidad:''}</option>`).join('');
+        if (prev) sel.value = prev;
+      }
+    }
     loadDisponibilidad();
   }
 
