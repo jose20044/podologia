@@ -425,7 +425,7 @@
           <h2 style="font-family:'Playfair Display',serif;font-size:22px;">Especialistas</h2>
           <p style="font-size:13px;color:var(--text2);margin-top:4px;">Gestiona los profesionales de la clínica.</p>
         </div>
-        <button class="btn btn-primary" onclick="openModal('modal-especialista')">+ Nuevo especialista</button>
+        <button class="btn btn-primary" onclick="resetEspModal();openModal('modal-especialista')">+ Nuevo especialista</button>
       </div>
       <div id="especialistas-list" class="patient-grid"></div>
     </div>
@@ -608,23 +608,40 @@
   </div>
 </div>
 
-<!-- MODAL NUEVO ESPECIALISTA (solo admin) -->
+<!-- MODAL CREAR/EDITAR ESPECIALISTA (solo admin) -->
 <div class="modal-overlay" id="modal-especialista">
   <div class="modal">
     <div class="modal-header">
-      <h2>🩺 Nuevo Especialista</h2>
+      <h2 id="esp-modal-titulo">🩺 Nuevo Especialista</h2>
       <button class="modal-close" onclick="closeModal('modal-especialista')">×</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="esp-edit-id" value="">
+      <!-- Foto de perfil -->
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px;">
+        <div id="esp-foto-prev" style="width:72px;height:72px;border-radius:50%;background:var(--accent);color:#062b23;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:24px;background-size:cover;background-position:center;flex-shrink:0;">🩺</div>
+        <div>
+          <label class="btn btn-outline" style="cursor:pointer;display:inline-block;">
+            📷 Subir foto
+            <input type="file" id="esp-foto-file" accept="image/*" style="display:none;" onchange="onEspFoto(event)">
+          </label>
+          <button type="button" class="btn btn-outline" style="margin-left:6px;" onclick="quitarEspFoto()">Quitar</button>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px;">JPG/PNG, máx ~1MB</div>
+        </div>
+      </div>
+      <input type="hidden" id="esp-foto" value="">
       <div class="form-grid">
         <div class="form-group"><label>Nombre *</label><input class="input" id="esp-nombre" type="text" placeholder="Dr/Dra. Nombre Apellido"></div>
         <div class="form-group"><label>Especialidad</label><input class="input" id="esp-especialidad" type="text" placeholder="Ej: Podología clínica"></div>
         <div class="form-group"><label>Email *</label><input class="input" id="esp-email" type="email" placeholder="profesional@clinic.com"></div>
-        <div class="form-group"><label>Contraseña * (mín. 6)</label><input class="input" id="esp-password" type="password" placeholder="••••••••"></div>
+        <div class="form-group"><label id="esp-pwd-label">Contraseña * (mín. 6)</label><input class="input" id="esp-password" type="password" placeholder="••••••••"></div>
+        <div class="form-group full" id="esp-activo-wrap" style="display:none;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="esp-activo" checked style="width:auto;"> Especialista activo (puede recibir reservas)</label>
+        </div>
       </div>
       <div class="form-actions">
         <button class="btn btn-outline" onclick="closeModal('modal-especialista')">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveEspecialista()">Crear especialista</button>
+        <button class="btn btn-primary" id="esp-save-btn" onclick="saveEspecialista()">Crear especialista</button>
       </div>
     </div>
   </div>
@@ -911,50 +928,115 @@
     renderEspecialistas();
   }
 
+  function avatarEsp(e, size) {
+    const ini = e.name.split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    if (e.foto) return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#ccc center/cover no-repeat url('${e.foto}');flex-shrink:0;"></div>`;
+    return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:var(--accent);color:#062b23;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${ini}</div>`;
+  }
+
   function renderEspecialistas() {
     const cont = document.getElementById('especialistas-list');
     if (!cont) return;
     if (!especialistas.length) { cont.innerHTML = '<div style="color:var(--text3);">Sin especialistas aún.</div>'; return; }
     cont.innerHTML = especialistas.map(e => {
-      const ini = e.name.split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
       const estado = e.activo ? '<span style="color:var(--accent);font-size:12px;">● Activo</span>' : '<span style="color:var(--text3);font-size:12px;">○ Inactivo</span>';
       return `<div class="card" style="padding:16px;display:flex;gap:14px;align-items:center;">
-        <div style="width:46px;height:46px;border-radius:50%;background:var(--accent);color:#062b23;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${ini}</div>
+        ${avatarEsp(e,46)}
         <div style="flex:1;min-width:0;">
           <div style="font-weight:700;">${e.name}</div>
           <div style="font-size:12px;color:var(--text2);">${e.especialidad||'—'}</div>
           <div style="font-size:12px;color:var(--text3);">${e.email} · ${estado}</div>
         </div>
-        <button class="btn btn-outline" style="padding:6px 10px;font-size:12px;" onclick="resetPassEspecialista(${e.id},'${e.name.replace(/'/g,"")}')">🔑 Clave</button>
+        <button class="btn btn-outline" style="padding:6px 10px;font-size:12px;" onclick="editarEspecialista(${e.id})">✏️ Editar</button>
       </div>`;
     }).join('');
   }
 
+  // Comprime una imagen a base64 (máx 320px, JPEG) para usarla como avatar
+  function onEspFoto(ev) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 320, scale = Math.min(1, max/Math.max(img.width,img.height));
+        const c = document.createElement('canvas');
+        c.width = img.width*scale; c.height = img.height*scale;
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        const data = c.toDataURL('image/jpeg', 0.8);
+        document.getElementById('esp-foto').value = data;
+        document.getElementById('esp-foto-prev').style.background = `#ccc center/cover no-repeat url('${data}')`;
+        document.getElementById('esp-foto-prev').textContent = '';
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+  function quitarEspFoto() {
+    document.getElementById('esp-foto').value = '';
+    document.getElementById('esp-foto-file').value = '';
+    const p = document.getElementById('esp-foto-prev');
+    p.style.background = 'var(--accent)'; p.textContent = '🩺';
+  }
+
+  function resetEspModal() {
+    document.getElementById('esp-edit-id').value = '';
+    ['esp-nombre','esp-especialidad','esp-email','esp-password','esp-foto'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('esp-modal-titulo').textContent = '🩺 Nuevo Especialista';
+    document.getElementById('esp-save-btn').textContent = 'Crear especialista';
+    document.getElementById('esp-pwd-label').textContent = 'Contraseña * (mín. 6)';
+    document.getElementById('esp-email').disabled = false;
+    document.getElementById('esp-activo-wrap').style.display = 'none';
+    document.getElementById('esp-foto-file').value = '';
+    const p = document.getElementById('esp-foto-prev'); p.style.background='var(--accent)'; p.textContent='🩺';
+  }
+
+  function editarEspecialista(id) {
+    const e = especialistas.find(x=>x.id===id);
+    if (!e) return;
+    resetEspModal();
+    document.getElementById('esp-edit-id').value = id;
+    document.getElementById('esp-nombre').value = e.name||'';
+    document.getElementById('esp-especialidad').value = e.especialidad||'';
+    document.getElementById('esp-email').value = e.email||'';
+    document.getElementById('esp-email').disabled = true; // el email es el login, no se cambia aquí
+    document.getElementById('esp-foto').value = e.foto||'';
+    document.getElementById('esp-modal-titulo').textContent = '✏️ Editar Especialista';
+    document.getElementById('esp-save-btn').textContent = 'Guardar cambios';
+    document.getElementById('esp-pwd-label').textContent = 'Nueva contraseña (opcional)';
+    document.getElementById('esp-activo-wrap').style.display = 'block';
+    document.getElementById('esp-activo').checked = !!e.activo;
+    const p = document.getElementById('esp-foto-prev');
+    if (e.foto) { p.style.background = `#ccc center/cover no-repeat url('${e.foto}')`; p.textContent=''; }
+    else { p.style.background='var(--accent)'; p.textContent = e.name.split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+    openModal('modal-especialista');
+  }
+
   async function saveEspecialista() {
+    const id = document.getElementById('esp-edit-id').value;
     const name = document.getElementById('esp-nombre').value.trim();
     const especialidad = document.getElementById('esp-especialidad').value.trim();
     const email = document.getElementById('esp-email').value.trim();
     const password = document.getElementById('esp-password').value;
-    if (!name || !email || !password) { showToast('⚠️ Nombre, email y contraseña son obligatorios','error'); return; }
+    const foto = document.getElementById('esp-foto').value;
     try {
-      const res = await fetch(API_URL+'/especialistas', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body:JSON.stringify({name,email,password,especialidad}) });
+      let res;
+      if (id) {
+        const body = { name, especialidad, foto, activo: document.getElementById('esp-activo').checked };
+        if (password) body.password = password;
+        res = await fetch(API_URL+'/especialistas/'+id, { method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body:JSON.stringify(body) });
+      } else {
+        if (!name || !email || !password) { showToast('⚠️ Nombre, email y contraseña son obligatorios','error'); return; }
+        res = await fetch(API_URL+'/especialistas', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body:JSON.stringify({name,email,password,especialidad,foto}) });
+      }
       const d = await res.json();
       if (res.ok) {
-        showToast('✅ Especialista creado');
+        showToast(id ? '✅ Especialista actualizado' : '✅ Especialista creado');
         closeModal('modal-especialista');
-        ['esp-nombre','esp-especialidad','esp-email','esp-password'].forEach(id=>document.getElementById(id).value='');
+        resetEspModal();
         await applyRoleUI();
       } else showToast('❌ '+(d.error||'Error'),'error');
-    } catch { showToast('❌ Sin conexión','error'); }
-  }
-
-  async function resetPassEspecialista(id, nombre) {
-    const nueva = prompt('Nueva contraseña para '+nombre+' (mín. 6 caracteres):');
-    if (!nueva) return;
-    if (nueva.length < 6) { showToast('⚠️ Mínimo 6 caracteres','error'); return; }
-    try {
-      const res = await fetch(API_URL+'/especialistas/'+id, { method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body:JSON.stringify({password:nueva}) });
-      if (res.ok) showToast('✅ Contraseña actualizada'); else { const d=await res.json(); showToast('❌ '+(d.error||'Error'),'error'); }
     } catch { showToast('❌ Sin conexión','error'); }
   }
 
@@ -1621,186 +1703,145 @@
 
   // ========== TEMA ==========
 
-  // ========== ENTRADA CLÍNICA ESPECIALIZADA ==========
+  // ========== ENTRADA CLÍNICA ESPECIALIZADA (Plantilla) ==========
   let pacienteEntradaEsp = null;
+  let ecFotos = { 1:'', 2:'', 3:'' };
 
   function abrirEntradaEspecializada(pacienteId) {
     pacienteEntradaEsp = pacientes.find(p => p.id === pacienteId);
     if (!pacienteEntradaEsp) return;
-    // Set fecha de hoy
-    const hoy = new Date().toISOString().split('T')[0];
-    document.getElementById('esp-fecha-entrada').value = hoy;
-    document.getElementById('esp-modal-paciente-nombre').textContent = pacienteEntradaEsp.nombre;
-    // Prellenar datos del paciente
-    // Limpiar checkboxes
-    document.querySelectorAll('[name^="esp2-"]').forEach(el => { if(el.type==='checkbox'||el.type==='radio') el.checked=false; });
-    // Limpiar textos
-    ['esp2-nombre','esp2-clinica','esp2-tel','esp2-obs-exploracion','esp2-diagnostico','esp2-procedimientos','esp2-higiene','esp2-antimico','esp2-ortesis','esp2-recomendaciones'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
-    document.getElementById('esp2-proxima-cita').value = '';
+    const p = pacienteEntradaEsp;
+    ecFotos = { 1:'', 2:'', 3:'' };
+    // Reset campos de texto/area/select
+    document.querySelectorAll('#ec-form input, #ec-form textarea, #ec-form select').forEach(el => {
+      if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+      else if (el.type !== 'file') el.value = '';
+    });
+    [1,2,3].forEach(n => { const b=document.getElementById('ec-foto'+n+'-box'); if(b){b.style.backgroundImage='';b.classList.remove('has-img');} });
+    document.getElementById('ec-estres').value = 5; document.getElementById('ec-estres-val').textContent = '5';
+    // Prefill especialista (usuario actual) y paciente
+    document.getElementById('ec-esp-nombre').value = currentUser.name || '';
+    if (currentUser.especialidad) { const s=document.getElementById('ec-esp-especialidad'); if([...s.options].some(o=>o.value===currentUser.especialidad)) s.value=currentUser.especialidad; }
+    document.getElementById('ec-fecha').value = new Date().toISOString().split('T')[0];
+    document.getElementById('ec-pac-nombre').value = p.nombre || '';
+    document.getElementById('ec-pac-edad').value = p.edad || '';
+    document.getElementById('ec-pac-tel').value = p.telefono || '';
+    document.getElementById('ec-pac-domicilio').value = p.direccion || '';
+    document.getElementById('ec-paciente-nombre').textContent = p.nombre + (p.rut ? ' · ' + p.rut : '');
     openModal('modal-especializado');
+  }
+
+  // Comprime una foto clínica a base64 y la muestra
+  function ecFoto(ev, n) {
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 800, scale = Math.min(1, max/Math.max(img.width,img.height));
+        const c = document.createElement('canvas');
+        c.width = img.width*scale; c.height = img.height*scale;
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        const data = c.toDataURL('image/jpeg', 0.7);
+        ecFotos[n] = data;
+        const box = document.getElementById('ec-foto'+n+'-box');
+        box.style.backgroundImage = `url('${data}')`; box.classList.add('has-img');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function ecChecks(name) { return [...document.querySelectorAll(`[name="${name}"]:checked`)].map(e=>e.value); }
+  function ecVal(id){ const e=document.getElementById(id); return e?e.value.trim?e.value.trim():e.value:''; }
+
+  function recolectarEntrada() {
+    return {
+      especialista: { nombre: ecVal('ec-esp-nombre'), especialidad: ecVal('ec-esp-especialidad'), clinica: ecVal('ec-esp-clinica'), tel: ecVal('ec-esp-tel'), email: ecVal('ec-esp-email') },
+      fecha: ecVal('ec-fecha'),
+      paciente: { nombre: ecVal('ec-pac-nombre'), edad: ecVal('ec-pac-edad'), sexo: ecVal('ec-pac-sexo'), tel: ecVal('ec-pac-tel'), domicilio: ecVal('ec-pac-domicilio'), ocupacion: ecVal('ec-pac-ocupacion') },
+      antecedentes: { condiciones: ecChecks('ec-cond'), tratamientoActual: ecVal('ec-trat-actual') },
+      estiloVida: { actividad: (ecChecks('ec-actividad')[0]||''), calzado: ecVal('ec-calzado'), caminata: ecVal('ec-caminata'), habitos: ecChecks('ec-hab'), estres: ecVal('ec-estres') },
+      exploracion: { unas: ecChecks('ec-unas'), piel: ecChecks('ec-piel'), marcha: ecVal('ec-marcha'), pulsos: ecVal('ec-pulsos'), llenado: ecVal('ec-llenado'), temperatura: ecVal('ec-temp'), neurologia: ecVal('ec-neuro'), lado: ecVal('ec-lado'), observaciones: ecVal('ec-obs') },
+      plan: { diagnostico: ecVal('ec-diagnostico'), higiene: ecVal('ec-higiene'), cuidadoUnas: ecVal('ec-cuidado-unas'), antimicotico: ecVal('ec-antimico'), ortesis: ecVal('ec-ortesis'), recomendaciones: ecVal('ec-recomendaciones'), proximaCita: ecVal('ec-proxima-cita') },
+      fotos: { f1: ecFotos[1], f2: ecFotos[2], f3: ecFotos[3], comentarios: ecVal('ec-foto-coment') },
+      consentimiento: document.getElementById('ec-consent').checked
+    };
+  }
+
+  function resumenEntrada(d) {
+    const j = a => (a && a.length) ? a.join(', ') : '';
+    return [
+      d.especialista.nombre ? `**Especialista:** ${d.especialista.nombre} (${d.especialista.especialidad})${d.especialista.clinica?' — '+d.especialista.clinica:''}` : '',
+      j(d.antecedentes.condiciones) ? `**Antecedentes:** ${j(d.antecedentes.condiciones)}` : '',
+      d.antecedentes.tratamientoActual ? `**Tratamiento actual:** ${d.antecedentes.tratamientoActual}` : '',
+      `**Estilo de vida:** Actividad ${d.estiloVida.actividad||'—'}${d.estiloVida.calzado?', Calzado '+d.estiloVida.calzado:''}${j(d.estiloVida.habitos)?', Hábitos '+j(d.estiloVida.habitos):''}, Estrés ${d.estiloVida.estres}/10`,
+      j(d.exploracion.unas) ? `**Uñas:** ${j(d.exploracion.unas)}` : '',
+      j(d.exploracion.piel) ? `**Piel:** ${j(d.exploracion.piel)}` : '',
+      `**Exploración:** Marcha ${d.exploracion.marcha}, Pulsos ${d.exploracion.pulsos}, Llenado ${d.exploracion.llenado}, Temp ${d.exploracion.temperatura}, Neuro ${d.exploracion.neurologia}, Lado ${d.exploracion.lado}`,
+      d.exploracion.observaciones ? `**Obs. exploración:** ${d.exploracion.observaciones}` : '',
+      d.plan.higiene ? `**Higiene:** ${d.plan.higiene}` : '',
+      d.plan.cuidadoUnas ? `**Cuidado uñas:** ${d.plan.cuidadoUnas}` : '',
+      d.plan.antimicotico ? `**Antimicótico:** ${d.plan.antimicotico}` : '',
+      d.plan.ortesis ? `**Órtesis/calzado:** ${d.plan.ortesis}` : '',
+      d.plan.recomendaciones ? `**Recomendaciones:** ${d.plan.recomendaciones}` : '',
+      d.fotos.comentarios ? `**Fotos:** ${d.fotos.comentarios}` : '',
+      `**Consentimiento:** ${d.consentimiento ? 'Aceptado' : 'No registrado'}`
+    ].filter(Boolean).join('\n');
   }
 
   async function guardarEntradaEspecializada() {
     if (!pacienteEntradaEsp) return;
-    const fecha = document.getElementById('esp-fecha-entrada').value;
-    if (!fecha) { showToast('⚠️ Selecciona una fecha','error'); return; }
-
-    const condiciones = [...document.querySelectorAll('[name="esp2-cond"]:checked')].map(e=>e.value).join(', ');
-    const habitos = [...document.querySelectorAll('[name="esp2-hab"]:checked')].map(e=>e.value).join(', ');
-    const unas = [...document.querySelectorAll('[name="esp2-unas"]:checked')].map(e=>e.value).join(', ');
-    const piel = [...document.querySelectorAll('[name="esp2-piel"]:checked')].map(e=>e.value).join(', ');
-
-    const especialista = document.getElementById('esp2-nombre').value.trim();
-    const especialidad = document.getElementById('esp2-especialidad').value;
-    const clinica = document.getElementById('esp2-clinica').value.trim();
-    const actividad = document.getElementById('esp2-actividad').value;
-    const calzado = document.getElementById('esp2-calzado').value;
-    const marcha = document.getElementById('esp2-marcha').value;
-    const pulsos = document.getElementById('esp2-pulsos').value;
-    const llenado = document.getElementById('esp2-llenado').value;
-    const temp = document.getElementById('esp2-temp').value;
-    const neuro = document.getElementById('esp2-neuro').value;
-    const lado = document.getElementById('esp2-lado').value;
-    const obsExp = document.getElementById('esp2-obs-exploracion').value.trim();
-    const diagnostico = document.getElementById('esp2-diagnostico').value.trim();
-    const procedimientos = document.getElementById('esp2-procedimientos').value.trim();
-    const higiene = document.getElementById('esp2-higiene').value.trim();
-    const antimico = document.getElementById('esp2-antimico').value.trim();
-    const ortesis = document.getElementById('esp2-ortesis').value.trim();
-    const recomendaciones = document.getElementById('esp2-recomendaciones').value.trim();
-    const proximaCita = document.getElementById('esp2-proxima-cita').value;
-
-    const observaciones = [
-      especialista ? `**Especialista:** ${especialista} (${especialidad})${clinica?' — '+clinica:''}` : '',
-      condiciones ? `**Antecedentes:** ${condiciones}` : '',
-      `**Estilo de vida:** Actividad: ${actividad}${calzado?', Calzado: '+calzado:''}${habitos?', Hábitos: '+habitos:''}`,
-      unas ? `**Uñas:** ${unas}` : '',
-      piel ? `**Piel:** ${piel}` : '',
-      `**Exploración:** Marcha: ${marcha}, Pulsos: ${pulsos}, Llenado capilar: ${llenado}, Temperatura: ${temp}, Neurología: ${neuro}, Lado: ${lado}`,
-      obsExp ? `**Observaciones exploración:** ${obsExp}` : '',
-      procedimientos ? `**Procedimientos:** ${procedimientos}` : '',
-      higiene ? `**Higiene del pie:** ${higiene}` : '',
-      antimico ? `**Antimicótico:** ${antimico}` : '',
-      ortesis ? `**Órtesis/Calzado:** ${ortesis}` : '',
-      recomendaciones ? `**Recomendaciones:** ${recomendaciones}` : '',
-    ].filter(Boolean).join('\n');
-
+    const d = recolectarEntrada();
+    if (!d.fecha) { showToast('⚠️ Indica la fecha de valoración','error'); return; }
+    if (!d.consentimiento) { showToast('⚠️ Falta el consentimiento informado','error'); return; }
     try {
       const res = await fetch(API_URL+'/historial', {
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
         body: JSON.stringify({
           paciente_id: pacienteEntradaEsp.id,
           tratamiento: 'Entrada Clínica Especializada',
-          diagnostico: diagnostico || 'Consulta podológica especializada',
-          observaciones,
-          proxima_cita: proximaCita || null,
-          fecha: fecha
+          diagnostico: d.plan.diagnostico || 'Consulta podológica especializada',
+          observaciones: resumenEntrada(d),
+          datos_json: d,
+          proxima_cita: d.plan.proximaCita || null
         })
       });
       if (res.ok) {
         showToast('✅ Entrada clínica guardada');
         closeModal('modal-especializado');
-        await cargarHistorial(pacienteEntradaEsp.id);
+        if (typeof cargarHistorial === 'function') await cargarHistorial(pacienteEntradaEsp.id);
+        seleccionarPacienteHistorial(pacienteEntradaEsp.id);
         agregarNotificacion('🦶','Entrada clínica especializada',`Registrada para ${pacienteEntradaEsp.nombre}.`,'badge-green');
-      } else {
-        const d = await res.json();
-        showToast('❌ '+(d.error||'Error al guardar'),'error');
-      }
+      } else { const e = await res.json(); showToast('❌ '+(e.error||'Error al guardar'),'error'); }
     } catch(e) { showToast('❌ '+e.message,'error'); }
   }
 
   function imprimirEntradaEspecializada() {
     const p = pacienteEntradaEsp;
     if (!p) { showToast('⚠️ No hay paciente seleccionado','error'); return; }
-    const fecha = document.getElementById('esp-fecha-entrada').value;
-    const fechaFormateada = fecha ? fecha.split('-').reverse().join('.') : '—';
-
-    const condiciones = [...document.querySelectorAll('[name="esp2-cond"]:checked')].map(e=>e.value).join(', ') || '—';
-    const habitos = [...document.querySelectorAll('[name="esp2-hab"]:checked')].map(e=>e.value).join(', ') || '—';
-    const unas = [...document.querySelectorAll('[name="esp2-unas"]:checked')].map(e=>e.value).join(', ') || '—';
-    const piel = [...document.querySelectorAll('[name="esp2-piel"]:checked')].map(e=>e.value).join(', ') || '—';
-
-    const get = id => { const el=document.getElementById(id); return el ? el.value.trim()||'—' : '—'; };
-
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <title>Entrada Clínica - ${p.nombre} - ${fechaFormateada}</title>
-    <style>
-      body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:0;padding:20px;}
-      h1{font-size:16px;color:#8b1a2f;margin:0;}
-      h2{font-size:13px;color:#8b1a2f;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:16px;}
-      .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #8b1a2f;padding-bottom:10px;margin-bottom:16px;}
-      .badge{background:#f5e6e8;color:#8b1a2f;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;}
-      table{width:100%;border-collapse:collapse;margin-top:8px;}
-      td{padding:5px 8px;border:1px solid #ddd;vertical-align:top;}
-      td:first-child{font-weight:600;width:35%;background:#fafafa;}
-      .section{margin-bottom:12px;}
-      p{margin:4px 0;}
-      @media print{body{padding:10px;}}
-    </style></head><body>
-    <div class="header">
-      <div>
-        <h1>🦶 Ficha Clínica Podológica Especializada</h1>
-        <p style="margin:4px 0;color:#555;">${get('esp2-nombre')} — ${get('esp2-especialidad')} — ${get('esp2-clinica')}</p>
-      </div>
-      <div style="text-align:right;">
-        <div class="badge">📅 ${fechaFormateada}</div>
-        <p style="margin:4px 0;font-size:11px;color:#555;">PodoClinic Sistema Podológico</p>
-      </div>
-    </div>
-
-    <h2>🧑 Datos del Paciente</h2>
-    <table>
-      <tr><td>Nombre</td><td>${p.nombre}</td></tr>
-      <tr><td>RUT</td><td>${p.rut||'—'}</td></tr>
-      <tr><td>Edad</td><td>${p.edad||'—'} años</td></tr>
-      <tr><td>Teléfono</td><td>${p.telefono||'—'}</td></tr>
-      <tr><td>Email</td><td>${p.email||'—'}</td></tr>
-      <tr><td>Alergias</td><td>${p.alergias||'—'}</td></tr>
-    </table>
-
-    <h2>📋 Antecedentes</h2>
-    <table>
-      <tr><td>Condiciones relevantes</td><td>${condiciones}</td></tr>
-      <tr><td>Tratamiento actual</td><td>${get('esp2-trat-actual')}</td></tr>
-      <tr><td>Actividad física</td><td>${get('esp2-actividad')}</td></tr>
-      <tr><td>Calzado habitual</td><td>${get('esp2-calzado')}</td></tr>
-      <tr><td>Hábitos</td><td>${habitos}</td></tr>
-    </table>
-
-    <h2>🦶 Exploración Clínica</h2>
-    <table>
-      <tr><td>Uñas</td><td>${unas}</td></tr>
-      <tr><td>Piel</td><td>${piel}</td></tr>
-      <tr><td>Marcha</td><td>${get('esp2-marcha')}</td></tr>
-      <tr><td>Pulsos vasculares</td><td>${get('esp2-pulsos')}</td></tr>
-      <tr><td>Llenado capilar</td><td>${get('esp2-llenado')}</td></tr>
-      <tr><td>Temperatura</td><td>${get('esp2-temp')}</td></tr>
-      <tr><td>Neurología</td><td>${get('esp2-neuro')}</td></tr>
-      <tr><td>Lado afectado</td><td>${get('esp2-lado')}</td></tr>
-      <tr><td>Observaciones exploración</td><td>${get('esp2-obs-exploracion')}</td></tr>
-    </table>
-
-    <h2>💊 Plan de Tratamiento</h2>
-    <table>
-      <tr><td>Diagnóstico</td><td>${get('esp2-diagnostico')}</td></tr>
-      <tr><td>Procedimientos</td><td>${get('esp2-procedimientos')}</td></tr>
-      <tr><td>Higiene del pie</td><td>${get('esp2-higiene')}</td></tr>
-      <tr><td>Antimicótico</td><td>${get('esp2-antimico')}</td></tr>
-      <tr><td>Órtesis / Calzado</td><td>${get('esp2-ortesis')}</td></tr>
-      <tr><td>Recomendaciones</td><td>${get('esp2-recomendaciones')}</td></tr>
-      <tr><td>Próxima cita</td><td>${get('esp2-proxima-cita')||'—'}</td></tr>
-    </table>
-
-    <p style="margin-top:30px;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:8px;">
-      Generado por PodoClinic el ${new Date().toLocaleDateString('es-CL')} — Documento confidencial de uso médico
-    </p>
-    <script>window.onload=function(){window.print();}<\/script>
-    </body></html>`;
-
-    const win = window.open('','_blank','width=900,height=700');
-    win.document.write(html);
-    win.document.close();
+    const d = recolectarEntrada();
+    const j = a => (a && a.length) ? a.join(', ') : '—';
+    const row = (k,v) => `<tr><td style="font-weight:600;width:38%;padding:6px 8px;border:1px solid #ddd;">${k}</td><td style="padding:6px 8px;border:1px solid #ddd;">${v||'—'}</td></tr>`;
+    const fotoImg = src => src ? `<img src="${src}" style="max-width:31%;border:1px solid #ccc;border-radius:6px;margin:4px;">` : '';
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Historia Clínica — ${p.nombre}</title>
+      <style>body{font-family:Arial,sans-serif;color:#222;padding:24px;} h1{color:#8b1a2f;font-size:20px;} h2{color:#8b1a2f;font-size:14px;margin:18px 0 6px;border-bottom:2px solid #8b1a2f;padding-bottom:3px;} table{border-collapse:collapse;width:100%;font-size:12px;}</style>
+      </head><body>
+      <h1>🦶 Historia Clínica Podológica</h1>
+      <div style="font-size:12px;color:#666;">Fecha: ${d.fecha||'—'} · Paciente: <b>${p.nombre}</b> ${p.rut?'· RUT '+p.rut:''}</div>
+      <h2>Especialista</h2><table>${row('Nombre',d.especialista.nombre)}${row('Especialidad',d.especialista.especialidad)}${row('Clínica',d.especialista.clinica)}${row('Teléfono',d.especialista.tel)}</table>
+      <h2>Paciente</h2><table>${row('Nombre',d.paciente.nombre)}${row('Edad',d.paciente.edad)}${row('Sexo',d.paciente.sexo)}${row('Teléfono',d.paciente.tel)}${row('Domicilio',d.paciente.domicilio)}${row('Ocupación',d.paciente.ocupacion)}</table>
+      <h2>Antecedentes</h2><table>${row('Condiciones',j(d.antecedentes.condiciones))}${row('Tratamiento actual',d.antecedentes.tratamientoActual)}</table>
+      <h2>Estilo de vida</h2><table>${row('Actividad',d.estiloVida.actividad)}${row('Calzado',d.estiloVida.calzado)}${row('Caminata',d.estiloVida.caminata)}${row('Hábitos',j(d.estiloVida.habitos))}${row('Estrés',d.estiloVida.estres+'/10')}</table>
+      <h2>Exploración</h2><table>${row('Uñas',j(d.exploracion.unas))}${row('Piel',j(d.exploracion.piel))}${row('Marcha',d.exploracion.marcha)}${row('Pulsos',d.exploracion.pulsos)}${row('Llenado capilar',d.exploracion.llenado)}${row('Temperatura',d.exploracion.temperatura)}${row('Neurología',d.exploracion.neurologia)}${row('Lado afectado',d.exploracion.lado)}${row('Observaciones',d.exploracion.observaciones)}</table>
+      <h2>Plan de tratamiento</h2><table>${row('Diagnóstico',d.plan.diagnostico)}${row('Higiene',d.plan.higiene)}${row('Cuidado uñas',d.plan.cuidadoUnas)}${row('Antimicótico',d.plan.antimicotico)}${row('Órtesis/calzado',d.plan.ortesis)}${row('Recomendaciones',d.plan.recomendaciones)}${row('Próxima cita',d.plan.proximaCita)}</table>
+      ${(d.fotos.f1||d.fotos.f2||d.fotos.f3)?`<h2>Fotografía clínica</h2><div>${fotoImg(d.fotos.f1)}${fotoImg(d.fotos.f2)}${fotoImg(d.fotos.f3)}</div><p style="font-size:12px;">${d.fotos.comentarios||''}</p>`:''}
+      <p style="margin-top:20px;font-size:11px;color:#666;">Consentimiento informado: ${d.consentimiento?'Aceptado':'No registrado'}</p>
+      </body></html>`;
+    const win = window.open('', '_blank');
+    win.document.write(html); win.document.close();
+    setTimeout(()=>win.print(), 400);
   }
 
   function initTheme(){const t=localStorage.getItem('podo_theme')||'dark';if(t==='light')document.body.classList.add('light-theme');updateThemeBtn();}
@@ -1823,115 +1864,197 @@
     it.addEventListener('click', () => { if(window.innerWidth<=768) closeSidebar(); }));
 </script>
 
-<!-- MODAL ENTRADA CLÍNICA ESPECIALIZADA -->
+<style>
+  .ec-sec { background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px; }
+  .ec-sec-t { font-size:13px; font-weight:700; color:var(--accent); margin-bottom:12px; }
+  .ec-checks { display:flex; flex-wrap:wrap; gap:8px 16px; }
+  .ec-checks.ec-col { flex-direction:column; gap:6px; }
+  .ec-checks label { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; color:var(--text1); }
+  .ec-checks input { width:auto; }
+  .ec-foto { border:2px dashed var(--border); border-radius:10px; height:90px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text3); font-size:12px; background-size:cover; background-position:center; }
+  .ec-foto.has-img span { display:none; }
+</style>
+<!-- MODAL ENTRADA CLÍNICA ESPECIALIZADA (basado en Plantilla.html) -->
 <div class="modal-overlay" id="modal-especializado" style="z-index:3000;">
-  <div class="modal" style="max-width:860px;width:95%;max-height:92vh;overflow-y:auto;">
-    <div class="modal-header" style="position:sticky;top:0;background:var(--surface);z-index:10;border-bottom:1px solid var(--border);padding-bottom:14px;">
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        <h2 style="font-size:16px;">🦶 Entrada Clínica Especializada</h2>
-        <span id="esp-modal-paciente-nombre" style="font-size:13px;color:var(--text2);"></span>
+  <div class="modal" style="max-width:900px;width:96%;max-height:92vh;overflow-y:auto;">
+    <div class="modal-header" style="position:sticky;top:0;background:var(--card);z-index:10;border-bottom:1px solid var(--border);">
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <h2 style="font-size:17px;">🦶 Historia Clínica Podológica</h2>
+        <span id="ec-paciente-nombre" style="font-size:13px;color:var(--text2);"></span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button onclick="imprimirEntradaEspecializada()" style="background:rgba(220,53,69,0.12);border:1px solid rgba(220,53,69,0.3);color:#e74c3c;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;">🖨️ Imprimir PDF</button>
+        <button class="btn btn-outline" style="font-size:12px;" onclick="imprimirEntradaEspecializada()">🖨️ Imprimir PDF</button>
         <button class="modal-close" onclick="closeModal('modal-especializado')">×</button>
       </div>
     </div>
-    <div class="modal-body" style="padding-top:20px;">
+    <div class="modal-body" id="ec-form" style="padding-top:18px;">
 
-      <!-- FECHA -->
-      <div style="background:rgba(139,26,47,0.08);border:1px solid rgba(139,26,47,0.2);border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:20px;">📅</span>
-        <div>
-          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:600;">Fecha de la entrada</div>
-          <input type="date" id="esp-fecha-entrada" style="background:transparent;border:none;color:var(--text1);font-size:15px;font-weight:600;cursor:pointer;outline:none;">
-        </div>
-      </div>
-
-      <!-- SECCIÓN 1: ESPECIALISTA -->
-      <div style="background:var(--surface2);border-radius:12px;padding:18px;margin-bottom:16px;">
-        <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px;">👨‍⚕️ Información del Especialista</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div><label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Nombre del Especialista</label><input class="input" id="esp2-nombre" style="margin-top:4px;" placeholder="Nombre completo"></div>
-          <div><label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Especialidad</label>
-            <select class="input" id="esp2-especialidad" style="margin-top:4px;">
+      <!-- 1. ESPECIALISTA -->
+      <div class="ec-sec">
+        <div class="ec-sec-t">👨‍⚕️ Información del Especialista</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Nombre del especialista</label><input class="input" id="ec-esp-nombre"></div>
+          <div class="form-group"><label>Especialidad</label>
+            <select class="input" id="ec-esp-especialidad">
               <option>Podólogo</option><option>Podólogo Clínico</option><option>Ortopodólogo</option><option>Fisioterapeuta Podólogo</option>
             </select>
           </div>
-          <div><label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Clínica / Centro de Salud</label><input class="input" id="esp2-clinica" style="margin-top:4px;" placeholder="Nombre del centro"></div>
-          <div><label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Teléfono</label><input class="input" id="esp2-tel" style="margin-top:4px;" placeholder="+56 9 xxxx xxxx"></div>
+          <div class="form-group"><label>Clínica / Centro</label><input class="input" id="ec-esp-clinica" placeholder="Nombre del centro"></div>
+          <div class="form-group"><label>Teléfono</label><input class="input" id="ec-esp-tel" placeholder="+56 9 xxxx xxxx"></div>
+          <div class="form-group"><label>Correo</label><input class="input" id="ec-esp-email" placeholder="correo@clinica.com"></div>
+          <div class="form-group"><label>Fecha de valoración</label><input class="input" type="date" id="ec-fecha"></div>
         </div>
       </div>
 
-      <!-- SECCIÓN 2: ANTECEDENTES -->
-      <div style="background:var(--surface2);border-radius:12px;padding:18px;margin-bottom:16px;">
-        <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:14px;">📋 Antecedentes Podológicos y Médicos</div>
-        <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Condiciones Relevantes</label>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;" id="esp2-condiciones">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-cond" value="Diabetes Mellitus"> Diabetes Mellitus</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-cond" value="Hipertensión arterial"> Hipertensión arterial</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-cond" value="Problemas vasculares"> Problemas vasculares</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-cond" value="Pie plano / pie cavo"> Pie plano / pie cavo</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-cond" value="Onicomicosis"> Onicomicosis</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-cond" value="Cirugías previas"> Cirugías previas</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-cond" value="Traumatismos"> Traumatismos</label>
+      <!-- 2. PACIENTE -->
+      <div class="ec-sec">
+        <div class="ec-sec-t">🧑 Datos del Paciente</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Nombre completo</label><input class="input" id="ec-pac-nombre"></div>
+          <div class="form-group"><label>Edad</label><input class="input" type="number" id="ec-pac-edad" min="0" max="120"></div>
+          <div class="form-group"><label>Sexo</label>
+            <select class="input" id="ec-pac-sexo"><option value="">—</option><option>Masculino</option><option>Femenino</option><option>Otro</option></select>
+          </div>
+          <div class="form-group"><label>Teléfono</label><input class="input" id="ec-pac-tel"></div>
+          <div class="form-group"><label>Domicilio</label><input class="input" id="ec-pac-domicilio"></div>
+          <div class="form-group"><label>Ocupación</label><input class="input" id="ec-pac-ocupacion"></div>
         </div>
-        <div style="margin-top:12px;">
-          <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Tratamiento médico actual</label>
-          <select class="input" id="esp2-trat-actual" style="margin-top:4px;">
-            <option value="">Seleccione</option>
-            <option>Insulina</option><option>Antidiabéticos orales</option><option>Antihipertensivos</option>
-            <option>Anticoagulantes</option><option>Inmunosupresores</option><option>No aplica</option>
+      </div>
+
+      <!-- 3. ANTECEDENTES -->
+      <div class="ec-sec">
+        <div class="ec-sec-t">📋 Antecedentes Podológicos y Médicos</div>
+        <label style="font-size:12px;color:var(--text3);font-weight:600;">Condiciones relevantes</label>
+        <div class="ec-checks">
+          <label><input type="checkbox" name="ec-cond" value="Diabetes Mellitus"> Diabetes Mellitus</label>
+          <label><input type="checkbox" name="ec-cond" value="Hipertensión arterial"> Hipertensión arterial</label>
+          <label><input type="checkbox" name="ec-cond" value="Problemas vasculares"> Problemas vasculares</label>
+          <label><input type="checkbox" name="ec-cond" value="Pie plano / pie cavo"> Pie plano / pie cavo</label>
+          <label><input type="checkbox" name="ec-cond" value="Antecedentes de onicomicosis"> Antec. onicomicosis</label>
+          <label><input type="checkbox" name="ec-cond" value="Cirugías previas podológicas"> Cirugías previas</label>
+          <label><input type="checkbox" name="ec-cond" value="Traumatismos miembros inferiores"> Traumatismos MMII</label>
+          <label><input type="checkbox" name="ec-cond" value="Otros"> Otros</label>
+        </div>
+        <div class="form-group" style="margin-top:12px;"><label>Tratamiento médico actual</label>
+          <select class="input" id="ec-trat-actual">
+            <option value="">Seleccione</option><option>Insulina</option><option>Antidiabéticos orales</option>
+            <option>Antihipertensivos</option><option>Anticoagulantes</option><option>Inmunosupresores</option>
+            <option>Otro tratamiento</option><option>No aplica</option>
           </select>
         </div>
       </div>
 
-      <!-- SECCIÓN 3: ESTILO DE VIDA -->
-      <div style="background:var(--surface2);border-radius:12px;padding:18px;margin-bottom:16px;">
-        <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:14px;">🏃 Estilo de Vida y Hábitos</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div>
-            <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Actividad física</label>
-            <select class="input" id="esp2-actividad" style="margin-top:4px;">
-              <option>Sedentario</option><option>Leve</option><option>Moderada</option><option>Intensa</option>
-            </select>
+      <!-- 4. ESTILO DE VIDA -->
+      <div class="ec-sec">
+        <div class="ec-sec-t">🏃 Estilo de Vida y Hábitos</div>
+        <label style="font-size:12px;color:var(--text3);font-weight:600;">Actividad física</label>
+        <div class="ec-checks">
+          <label><input type="radio" name="ec-actividad" value="Sedentario"> Sedentario</label>
+          <label><input type="radio" name="ec-actividad" value="Leve"> Leve</label>
+          <label><input type="radio" name="ec-actividad" value="Moderada"> Moderada</label>
+          <label><input type="radio" name="ec-actividad" value="Intensa"> Intensa</label>
+        </div>
+        <div class="form-grid" style="margin-top:12px;">
+          <div class="form-group"><label>Calzado habitual</label>
+            <select class="input" id="ec-calzado"><option value="">Seleccione</option><option>Zapato de vestir</option><option>Zapatilla deportiva</option><option>Sandalia / Chancla</option><option>Zapato de seguridad</option><option>Calzado ortopédico</option><option>Descalzo habitualmente</option><option>Tacón alto</option></select>
           </div>
-          <div>
-            <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Tipo de calzado</label>
-            <select class="input" id="esp2-calzado" style="margin-top:4px;">
-              <option value="">Seleccione</option>
-              <option>Zapato de vestir</option><option>Zapatilla deportiva</option><option>Sandalia / Chancla</option>
-              <option>Zapato de seguridad</option><option>Calzado ortopédico</option><option>Tacón alto</option>
-            </select>
-          </div>
-          <div style="grid-column:1/-1;">
-            <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Hábitos</label>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-hab" value="Tabaquismo"> Tabaquismo</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-hab" value="Alcohol"> Alcohol</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-hab" value="Ninguno"> Ninguno</label>
-            </div>
-          </div>
+          <div class="form-group"><label>Frecuencia de caminata</label><input class="input" id="ec-caminata" placeholder="Ej. 30 min/día"></div>
+        </div>
+        <label style="font-size:12px;color:var(--text3);font-weight:600;margin-top:8px;display:block;">Hábitos tóxicos</label>
+        <div class="ec-checks">
+          <label><input type="checkbox" name="ec-hab" value="Tabaquismo"> Tabaquismo</label>
+          <label><input type="checkbox" name="ec-hab" value="Alcohol"> Alcohol</label>
+          <label><input type="checkbox" name="ec-hab" value="Otros (drogas)"> Otros</label>
+          <label><input type="checkbox" name="ec-hab" value="Ninguno"> Ninguno</label>
+        </div>
+        <div class="form-group" style="margin-top:12px;"><label>Nivel de estrés (1–10): <span id="ec-estres-val">5</span></label>
+          <input type="range" id="ec-estres" min="1" max="10" value="5" style="width:100%;" oninput="document.getElementById('ec-estres-val').textContent=this.value">
         </div>
       </div>
 
-      <!-- SECCIÓN 4: EXPLORACIÓN CLÍNICA -->
-      <div style="background:var(--surface2);border-radius:12px;padding:18px;margin-bottom:16px;">
-        <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:14px;">🦶 Exploración Clínica Podológica</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div>
-            <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Uñas</label>
-            <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-unas" value="Sanas"> Sanas</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-unas" value="Onicomicosis"> Onicomicosis</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-unas" value="Onicogrifosis"> Onicogrifosis</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-unas" value="Uña encarnada"> Uña encarnada</label>
+      <!-- 5. EXPLORACIÓN -->
+      <div class="ec-sec">
+        <div class="ec-sec-t">🦶 Exploración Clínica Podológica</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Uñas</label>
+            <div class="ec-checks ec-col">
+              <label><input type="checkbox" name="ec-unas" value="Sanas"> Sanas</label>
+              <label><input type="checkbox" name="ec-unas" value="Onicomicosis"> Onicomicosis</label>
+              <label><input type="checkbox" name="ec-unas" value="Onicogrifosis"> Onicogrifosis</label>
+              <label><input type="checkbox" name="ec-unas" value="Onicocriptosis (uña encarnada)"> Uña encarnada</label>
+              <label><input type="checkbox" name="ec-unas" value="Otros"> Otros</label>
             </div>
           </div>
-          <div>
-            <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Piel y Tegumentos</label>
-            <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-piel" value="Sana"> Sana</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-piel" value="Hiperqueratosis"> Hiperqueratosis</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-piel" value="Maceración interdigital"> Maceración interdigital</label>
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" name="esp2-piel" value="Grietas/Fisuras"> Grietas/Fisuras</label>
-              <label style="display:fle
+          <div class="form-group"><label>Piel y tegumentos</label>
+            <div class="ec-checks ec-col">
+              <label><input type="checkbox" name="ec-piel" value="Sana"> Sana</label>
+              <label><input type="checkbox" name="ec-piel" value="Hiperqueratosis"> Hiperqueratosis</label>
+              <label><input type="checkbox" name="ec-piel" value="Maceración interdigital"> Maceración interdigital</label>
+              <label><input type="checkbox" name="ec-piel" value="Verrugas plantares"> Verrugas plantares</label>
+              <label><input type="checkbox" name="ec-piel" value="Eccemas/dermatitis"> Eccemas/dermatitis</label>
+              <label><input type="checkbox" name="ec-piel" value="Grietas/Fisuras"> Grietas/Fisuras</label>
+              <label><input type="checkbox" name="ec-piel" value="Heridas/Úlceras"> Heridas/Úlceras</label>
+            </div>
+          </div>
+        </div>
+        <div class="form-grid" style="margin-top:8px;">
+          <div class="form-group"><label>Marcha y postura</label><select class="input" id="ec-marcha"><option>Normal</option><option>Antálgica</option><option>En equino</option><option>Alterada</option></select></div>
+          <div class="form-group"><label>Pulsos (vascular)</label><select class="input" id="ec-pulsos"><option>Normal</option><option>Disminuido</option><option>Ausente</option></select></div>
+          <div class="form-group"><label>Llenado capilar</label><select class="input" id="ec-llenado"><option>Normal (&lt;2 seg)</option><option>Lento (2-3 seg)</option><option>Muy lento (&gt;3 seg)</option></select></div>
+          <div class="form-group"><label>Temperatura del pie</label><select class="input" id="ec-temp"><option>Normal</option><option>Fría</option><option>Caliente</option></select></div>
+          <div class="form-group"><label>Exploración neurológica</label><select class="input" id="ec-neuro"><option>Sensibilidad conservada</option><option>Hipoestesia leve</option><option>Hipoestesia severa</option><option>Anestesia</option></select></div>
+          <div class="form-group"><label>Lado(s) afectado(s)</label><select class="input" id="ec-lado"><option>N/A</option><option>Pie derecho</option><option>Pie izquierdo</option><option>Ambos pies</option></select></div>
+        </div>
+        <div class="form-group full" style="margin-top:8px;"><label>Observaciones de la exploración</label><textarea class="input" id="ec-obs" rows="2" placeholder="Hallazgos, deformidades, área principal de la lesión..."></textarea></div>
+      </div>
+
+      <!-- 6. PLAN DE TRATAMIENTO -->
+      <div class="ec-sec">
+        <div class="ec-sec-t">💊 Plan de Tratamiento Sugerido</div>
+        <div class="form-group full"><label>Diagnóstico</label><textarea class="input" id="ec-diagnostico" rows="2" placeholder="Diagnóstico podológico"></textarea></div>
+        <div class="form-group full"><label>Higiene del pie</label><textarea class="input" id="ec-higiene" rows="2"></textarea></div>
+        <div class="form-group full"><label>Corte y cuidado de uñas</label><textarea class="input" id="ec-cuidado-unas" rows="2"></textarea></div>
+        <div class="form-group full"><label>Tratamiento antimicótico (si aplica)</label><textarea class="input" id="ec-antimico" rows="2"></textarea></div>
+        <div class="form-group full"><label>Órtesis / calzado especial (si aplica)</label><textarea class="input" id="ec-ortesis" rows="2"></textarea></div>
+        <div class="form-group full"><label>Recomendaciones / seguimiento</label><textarea class="input" id="ec-recomendaciones" rows="2"></textarea></div>
+        <div class="form-group"><label>Próxima cita</label><input class="input" type="date" id="ec-proxima-cita"></div>
+      </div>
+
+      <!-- 7. FOTOGRAFÍA CLÍNICA -->
+      <div class="ec-sec">
+        <div class="ec-sec-t">📸 Fotografía Clínica</div>
+        <div class="form-grid" style="grid-template-columns:repeat(3,1fr);">
+          <div><div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Vista general / lesión</div>
+            <div class="ec-foto" id="ec-foto1-box" onclick="document.getElementById('ec-foto1').click()"><span>🖼️ Subir</span></div>
+            <input type="file" id="ec-foto1" accept="image/*" style="display:none;" onchange="ecFoto(event,1)"></div>
+          <div><div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Detalle (uñas/planta)</div>
+            <div class="ec-foto" id="ec-foto2-box" onclick="document.getElementById('ec-foto2').click()"><span>🖼️ Subir</span></div>
+            <input type="file" id="ec-foto2" accept="image/*" style="display:none;" onchange="ecFoto(event,2)"></div>
+          <div><div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Detalle (biomecánica)</div>
+            <div class="ec-foto" id="ec-foto3-box" onclick="document.getElementById('ec-foto3').click()"><span>🖼️ Subir</span></div>
+            <input type="file" id="ec-foto3" accept="image/*" style="display:none;" onchange="ecFoto(event,3)"></div>
+        </div>
+        <div class="form-group full" style="margin-top:10px;"><label>Comentarios sobre las fotografías</label><textarea class="input" id="ec-foto-coment" rows="2"></textarea></div>
+      </div>
+
+      <!-- 8. CONSENTIMIENTO -->
+      <div class="ec-sec">
+        <div class="ec-sec-t">⚠️ Consentimiento Informado</div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:13px;color:var(--text2);line-height:1.6;">
+          El paciente otorga su consentimiento para la valoración, diagnóstico y tratamiento podológico, incluyendo la exploración de los pies y la toma de fotografías clínicas para su expediente y seguimiento. Ha recibido explicaciones sobre su condición y el plan de tratamiento, y acepta riesgos y beneficios de los procedimientos.
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" id="ec-consent" style="width:auto;"> El paciente acepta el consentimiento informado
+        </label>
+      </div>
+
+      <div class="form-actions" style="position:sticky;bottom:0;background:var(--card);padding-top:14px;border-top:1px solid var(--border);">
+        <button class="btn btn-outline" onclick="closeModal('modal-especializado')">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarEntradaEspecializada()">💾 Guardar entrada clínica</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
