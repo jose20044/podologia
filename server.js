@@ -143,7 +143,11 @@ const pool = mysql.createPool({
   port:     parseInt(process.env.MYSQLPORT || process.env.DB_PORT || '3306'),
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  // Evita que conexiones inactivas se queden "muertas" (causa de datos que no
+  // cargan tras un rato / al refrescar). Mantiene vivo el socket TCP.
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000
 });
 
 // ──────────────────────────────────────────
@@ -938,6 +942,30 @@ app.post('/api/historial', verifyToken, async (req, res) => {
     );
     
     res.json({ success: true, id: result.insertId, message: 'Entrada guardada' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Editar una entrada del historial clínico
+app.put('/api/historial/:id', verifyToken, async (req, res) => {
+  try {
+    const { tratamiento, diagnostico, observaciones, proxima_cita, datos_json } = req.body;
+    const fields = [], values = [];
+    if (tratamiento !== undefined)  { fields.push('tratamiento = ?');  values.push(tratamiento || ''); }
+    if (diagnostico !== undefined)  { fields.push('diagnostico = ?');  values.push(diagnostico || ''); }
+    if (observaciones !== undefined){ fields.push('observaciones = ?');values.push(observaciones || ''); }
+    if (proxima_cita !== undefined) { fields.push('proxima_cita = ?'); values.push(proxima_cita || null); }
+    if (datos_json !== undefined) {
+      const datosStr = datos_json === null ? null : (typeof datos_json === 'string' ? datos_json : JSON.stringify(datos_json));
+      if (datosStr && datosStr.length > 5000000) return res.status(400).json({ error: 'Datos demasiado grandes' });
+      fields.push('datos_json = ?'); values.push(datosStr);
+    }
+    if (!fields.length) return res.status(400).json({ error: 'Sin cambios' });
+    values.push(req.params.id);
+    const [r] = await pool.execute(`UPDATE historial_clinico SET ${fields.join(', ')} WHERE id = ?`, values);
+    if (!r.affectedRows) return res.status(404).json({ error: 'Entrada no encontrada' });
+    res.json({ success: true, message: 'Entrada actualizada' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

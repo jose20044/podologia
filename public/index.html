@@ -837,6 +837,24 @@
 
   let authToken = localStorage.getItem('authToken');
   let currentUser = localStorage.getItem('currentUser') ? JSON.parse(localStorage.getItem('currentUser')) : null;
+
+  // Manejo global de sesión: si el token expiró/inválido (401), volver al login
+  // en vez de quedar con la app vacía (síntoma "no cargan datos tras refrescar").
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const res = await _origFetch(...args);
+    try {
+      const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+      if (res.status === 401 && authToken && url.includes('/api/') && !url.includes('/auth/login')) sesionExpirada();
+    } catch {}
+    return res;
+  };
+  function sesionExpirada() {
+    if (window.__sesExp) return; window.__sesExp = true;
+    localStorage.removeItem('authToken'); localStorage.removeItem('currentUser');
+    alert('Tu sesión expiró. Vuelve a iniciar sesión.');
+    location.reload();
+  }
   let pacientes = [], tratamientos = [], citas = [], notificaciones = [];
   let pacienteSeleccionado = null;
   let filtroEstadoCita = '';
@@ -1123,10 +1141,12 @@
     } catch(e) {}
   }
 
+  let historialActual = [];
   function renderHistorial(hist) {
+    historialActual = hist;
     const el = document.getElementById('historial-timeline');
     const countEl = document.getElementById('historial-count');
-    
+
     if (!hist.length) { 
       el.innerHTML='<div style="text-align:center;color:var(--text3);padding:40px;font-size:13px;"><div style="font-size:32px;margin-bottom:8px;">📋</div>Sin consultas registradas para este paciente</div>'; 
       if (countEl) countEl.textContent = '';
@@ -1143,7 +1163,10 @@
         <div class="timeline-dot"></div>
         <div class="timeline-date">${(()=>{ const d=new Date(h.fecha); const dd=String(d.getDate()).padStart(2,'0'); const mm=String(d.getMonth()+1).padStart(2,'0'); const yy=d.getFullYear(); const dias=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']; const meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']; return `${dias[d.getDay()]}, ${d.getDate()} de ${meses[d.getMonth()]} de ${yy} <span style='font-size:11px;background:rgba(255,255,255,0.06);padding:2px 7px;border-radius:6px;margin-left:6px;'>${dd}.${mm}.${yy}</span>`; })()}</div>
         <div class="timeline-card">
-          <h4 style="margin-bottom:8px;font-size:14px;color:var(--accent);">${h.tratamiento||'Consulta podológica'}</h4>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <h4 style="margin-bottom:8px;font-size:14px;color:var(--accent);">${h.tratamiento||'Consulta podológica'}</h4>
+            <button onclick="editarEntradaHistorial(${h.id})" style="background:rgba(255,255,255,0.08);border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--text2);white-space:nowrap;" title="Editar esta consulta">✏️ Editar</button>
+          </div>
           ${h.diagnostico && h.diagnostico !== obs ? `<div style="margin-bottom:8px;font-weight:600;font-size:13px;">Diagnóstico: ${h.diagnostico}</div>` : ''}
           <div style="font-size:13px;line-height:1.7;color:var(--text2);white-space:pre-wrap;">${obsFormatted}</div>
           ${h.proxima_cita?`<div style="margin-top:12px;"><span class="badge badge-yellow">📅 Próxima cita: ${new Date(h.proxima_cita).toLocaleDateString('es-CL')}</span></div>`:''}
@@ -1717,12 +1740,51 @@
   // ========== ENTRADA CLÍNICA ESPECIALIZADA (Plantilla) ==========
   let pacienteEntradaEsp = null;
   let ecFotos = { 1:'', 2:'', 3:'' };
+  let ecEditId = null;        // id de la entrada en edición (null = nueva)
+  let ecPadsInit = false;
+
+  // ── Pads de firma (canvas) ──
+  function initFirmaPad(id) {
+    const cv = document.getElementById(id);
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#1a1a1a';
+    let drawing = false;
+    const pos = e => {
+      const r = cv.getBoundingClientRect();
+      const t = e.touches ? e.touches[0] : e;
+      return { x: (t.clientX - r.left) * (cv.width / r.width), y: (t.clientY - r.top) * (cv.height / r.height) };
+    };
+    const start = e => { drawing = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); };
+    const move = e => { if (!drawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); cv.dataset.dirty = '1'; e.preventDefault(); };
+    const end = () => { drawing = false; };
+    cv.addEventListener('mousedown', start); cv.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    cv.addEventListener('touchstart', start, {passive:false}); cv.addEventListener('touchmove', move, {passive:false});
+    cv.addEventListener('touchend', end);
+  }
+  function limpiarFirma(id) {
+    const cv = document.getElementById(id); if (!cv) return;
+    cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); cv.dataset.dirty = '';
+  }
+  function getFirma(id) {
+    const cv = document.getElementById(id); if (!cv) return '';
+    return cv.dataset.dirty ? cv.toDataURL('image/png') : '';
+  }
+  function setFirma(id, data) {
+    const cv = document.getElementById(id); if (!cv) return;
+    const ctx = cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height); cv.dataset.dirty = '';
+    if (data) { const img = new Image(); img.onload = () => { ctx.drawImage(img,0,0,cv.width,cv.height); cv.dataset.dirty='1'; }; img.src = data; }
+  }
 
   function abrirEntradaEspecializada(pacienteId) {
     pacienteEntradaEsp = pacientes.find(p => p.id === pacienteId);
     if (!pacienteEntradaEsp) return;
     const p = pacienteEntradaEsp;
+    ecEditId = null;
     ecFotos = { 1:'', 2:'', 3:'' };
+    if (!ecPadsInit) { initFirmaPad('ec-firma-paciente'); initFirmaPad('ec-firma-profesional'); ecPadsInit = true; }
+    limpiarFirma('ec-firma-paciente'); limpiarFirma('ec-firma-profesional');
     // Reset campos de texto/area/select
     document.querySelectorAll('#ec-form input, #ec-form textarea, #ec-form select').forEach(el => {
       if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
@@ -1777,6 +1839,7 @@
       exploracion: { unas: ecChecks('ec-unas'), piel: ecChecks('ec-piel'), marcha: ecVal('ec-marcha'), pulsos: ecVal('ec-pulsos'), llenado: ecVal('ec-llenado'), temperatura: ecVal('ec-temp'), neurologia: ecVal('ec-neuro'), lado: ecVal('ec-lado'), observaciones: ecVal('ec-obs') },
       plan: { diagnostico: ecVal('ec-diagnostico'), higiene: ecVal('ec-higiene'), cuidadoUnas: ecVal('ec-cuidado-unas'), antimicotico: ecVal('ec-antimico'), ortesis: ecVal('ec-ortesis'), recomendaciones: ecVal('ec-recomendaciones'), proximaCita: ecVal('ec-proxima-cita') },
       fotos: { f1: ecFotos[1], f2: ecFotos[2], f3: ecFotos[3], comentarios: ecVal('ec-foto-coment') },
+      firmas: { paciente: getFirma('ec-firma-paciente'), profesional: getFirma('ec-firma-profesional') },
       consentimiento: document.getElementById('ec-consent').checked
     };
   }
@@ -1807,25 +1870,92 @@
     const d = recolectarEntrada();
     if (!d.fecha) { showToast('⚠️ Indica la fecha de valoración','error'); return; }
     if (!d.consentimiento) { showToast('⚠️ Falta el consentimiento informado','error'); return; }
+    const body = {
+      paciente_id: pacienteEntradaEsp.id,
+      tratamiento: 'Entrada Clínica Especializada',
+      diagnostico: d.plan.diagnostico || 'Consulta podológica especializada',
+      observaciones: resumenEntrada(d),
+      datos_json: d,
+      proxima_cita: d.plan.proximaCita || null
+    };
     try {
-      const res = await fetch(API_URL+'/historial', {
-        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},
-        body: JSON.stringify({
-          paciente_id: pacienteEntradaEsp.id,
-          tratamiento: 'Entrada Clínica Especializada',
-          diagnostico: d.plan.diagnostico || 'Consulta podológica especializada',
-          observaciones: resumenEntrada(d),
-          datos_json: d,
-          proxima_cita: d.plan.proximaCita || null
-        })
-      });
+      const url = ecEditId ? API_URL+'/historial/'+ecEditId : API_URL+'/historial';
+      const method = ecEditId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body: JSON.stringify(body) });
       if (res.ok) {
-        showToast('✅ Entrada clínica guardada');
+        showToast(ecEditId ? '✅ Entrada actualizada' : '✅ Entrada clínica guardada');
+        ecEditId = null;
         closeModal('modal-especializado');
         if (typeof cargarHistorial === 'function') await cargarHistorial(pacienteEntradaEsp.id);
         seleccionarPacienteHistorial(pacienteEntradaEsp.id);
-        agregarNotificacion('🦶','Entrada clínica especializada',`Registrada para ${pacienteEntradaEsp.nombre}.`,'badge-green');
       } else { const e = await res.json(); showToast('❌ '+(e.error||'Error al guardar'),'error'); }
+    } catch(e) { showToast('❌ '+e.message,'error'); }
+  }
+
+  // Prefill del formulario clínico desde un datos_json guardado (para editar)
+  function prefillEcForm(d) {
+    if (!d) return;
+    const set = (id,v)=>{ const e=document.getElementById(id); if(e) e.value = v||''; };
+    const checkMany = (name, arr)=>{ const s=new Set(arr||[]); document.querySelectorAll(`[name="${name}"]`).forEach(el=>el.checked=s.has(el.value)); };
+    const e=d.especialista||{}, p=d.paciente||{}, a=d.antecedentes||{}, ev=d.estiloVida||{}, ex=d.exploracion||{}, pl=d.plan||{}, f=d.fotos||{}, fi=d.firmas||{};
+    set('ec-esp-nombre',e.nombre); set('ec-esp-especialidad',e.especialidad); set('ec-esp-clinica',e.clinica); set('ec-esp-tel',e.tel); set('ec-esp-email',e.email);
+    set('ec-fecha',d.fecha);
+    set('ec-pac-nombre',p.nombre); set('ec-pac-edad',p.edad); set('ec-pac-sexo',p.sexo); set('ec-pac-tel',p.tel); set('ec-pac-domicilio',p.domicilio); set('ec-pac-ocupacion',p.ocupacion);
+    checkMany('ec-cond',a.condiciones); set('ec-trat-actual',a.tratamientoActual);
+    if(ev.actividad){ const r=document.querySelector(`[name="ec-actividad"][value="${ev.actividad}"]`); if(r) r.checked=true; }
+    set('ec-calzado',ev.calzado); set('ec-caminata',ev.caminata); checkMany('ec-hab',ev.habitos);
+    set('ec-estres',ev.estres||5); document.getElementById('ec-estres-val').textContent = ev.estres||5;
+    checkMany('ec-unas',ex.unas); checkMany('ec-piel',ex.piel);
+    set('ec-marcha',ex.marcha); set('ec-pulsos',ex.pulsos); set('ec-llenado',ex.llenado); set('ec-temp',ex.temperatura); set('ec-neuro',ex.neurologia); set('ec-lado',ex.lado); set('ec-obs',ex.observaciones);
+    set('ec-diagnostico',pl.diagnostico); set('ec-higiene',pl.higiene); set('ec-cuidado-unas',pl.cuidadoUnas); set('ec-antimico',pl.antimicotico); set('ec-ortesis',pl.ortesis); set('ec-recomendaciones',pl.recomendaciones); set('ec-proxima-cita',pl.proximaCita);
+    ecFotos = { 1:f.f1||'', 2:f.f2||'', 3:f.f3||'' };
+    [1,2,3].forEach(n=>{ const box=document.getElementById('ec-foto'+n+'-box'); if(box){ if(ecFotos[n]){box.style.backgroundImage=`url('${ecFotos[n]}')`;box.classList.add('has-img');}else{box.style.backgroundImage='';box.classList.remove('has-img');} } });
+    set('ec-foto-coment',f.comentarios);
+    document.getElementById('ec-consent').checked = !!d.consentimiento;
+    setFirma('ec-firma-paciente', fi.paciente); setFirma('ec-firma-profesional', fi.profesional);
+  }
+
+  // Editar una consulta ya registrada
+  function editarEntradaHistorial(histId) {
+    const h = (historialActual||[]).find(x=>x.id===histId);
+    if (!h) return;
+    pacienteEntradaEsp = pacientes.find(p=>p.id===h.paciente_id) || pacienteEntradaEsp;
+    let datos = null;
+    if (h.datos_json) { try { datos = typeof h.datos_json==='string'?JSON.parse(h.datos_json):h.datos_json; } catch {} }
+    if (datos) {
+      // Entrada especializada: reabrir el formulario completo prefilled
+      if (!ecPadsInit) { initFirmaPad('ec-firma-paciente'); initFirmaPad('ec-firma-profesional'); ecPadsInit = true; }
+      document.querySelectorAll('#ec-form input, #ec-form textarea, #ec-form select').forEach(el => { if(el.type==='checkbox'||el.type==='radio') el.checked=false; else if(el.type!=='file') el.value=''; });
+      prefillEcForm(datos);
+      ecEditId = histId;
+      document.getElementById('ec-paciente-nombre').textContent = (pacienteEntradaEsp?pacienteEntradaEsp.nombre:'') + ' · Editando entrada';
+      openModal('modal-especializado');
+    } else {
+      // Entrada simple: modal básico
+      document.getElementById('eh-id').value = h.id;
+      document.getElementById('eh-tratamiento').value = h.tratamiento||'';
+      document.getElementById('eh-diagnostico').value = h.diagnostico||'';
+      document.getElementById('eh-observaciones').value = h.observaciones||'';
+      document.getElementById('eh-proxima').value = h.proxima_cita ? String(h.proxima_cita).slice(0,10) : '';
+      openModal('modal-editar-historial');
+    }
+  }
+
+  async function guardarEdicionHistorial() {
+    const id = document.getElementById('eh-id').value;
+    const body = {
+      tratamiento: document.getElementById('eh-tratamiento').value.trim(),
+      diagnostico: document.getElementById('eh-diagnostico').value.trim(),
+      observaciones: document.getElementById('eh-observaciones').value.trim(),
+      proxima_cita: document.getElementById('eh-proxima').value || null
+    };
+    try {
+      const res = await fetch(API_URL+'/historial/'+id, { method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body: JSON.stringify(body) });
+      if (res.ok) {
+        showToast('✅ Entrada actualizada');
+        closeModal('modal-editar-historial');
+        if (pacienteSeleccionado) { await cargarHistorial(pacienteSeleccionado.id); }
+      } else { const e=await res.json(); showToast('❌ '+(e.error||'Error'),'error'); }
     } catch(e) { showToast('❌ '+e.message,'error'); }
   }
 
@@ -1848,7 +1978,17 @@
       <h2>Exploración</h2><table>${row('Uñas',j(d.exploracion.unas))}${row('Piel',j(d.exploracion.piel))}${row('Marcha',d.exploracion.marcha)}${row('Pulsos',d.exploracion.pulsos)}${row('Llenado capilar',d.exploracion.llenado)}${row('Temperatura',d.exploracion.temperatura)}${row('Neurología',d.exploracion.neurologia)}${row('Lado afectado',d.exploracion.lado)}${row('Observaciones',d.exploracion.observaciones)}</table>
       <h2>Plan de tratamiento</h2><table>${row('Diagnóstico',d.plan.diagnostico)}${row('Higiene',d.plan.higiene)}${row('Cuidado uñas',d.plan.cuidadoUnas)}${row('Antimicótico',d.plan.antimicotico)}${row('Órtesis/calzado',d.plan.ortesis)}${row('Recomendaciones',d.plan.recomendaciones)}${row('Próxima cita',d.plan.proximaCita)}</table>
       ${(d.fotos.f1||d.fotos.f2||d.fotos.f3)?`<h2>Fotografía clínica</h2><div>${fotoImg(d.fotos.f1)}${fotoImg(d.fotos.f2)}${fotoImg(d.fotos.f3)}</div><p style="font-size:12px;">${d.fotos.comentarios||''}</p>`:''}
-      <p style="margin-top:20px;font-size:11px;color:#666;">Consentimiento informado: ${d.consentimiento?'Aceptado':'No registrado'}</p>
+      <p style="margin-top:16px;font-size:11px;color:#666;">Consentimiento informado: ${d.consentimiento?'Aceptado':'No registrado'}</p>
+      <div style="display:flex;gap:24px;margin-top:24px;">
+        <div style="flex:1;text-align:center;">
+          ${d.firmas&&d.firmas.paciente?`<img src="${d.firmas.paciente}" style="max-width:200px;height:80px;object-fit:contain;">`:'<div style="height:80px;"></div>'}
+          <div style="border-top:1px solid #333;margin-top:4px;padding-top:4px;font-size:11px;">Firma del paciente o responsable</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          ${d.firmas&&d.firmas.profesional?`<img src="${d.firmas.profesional}" style="max-width:200px;height:80px;object-fit:contain;">`:'<div style="height:80px;"></div>'}
+          <div style="border-top:1px solid #333;margin-top:4px;padding-top:4px;font-size:11px;">Firma del profesional tratante</div>
+        </div>
+      </div>
       </body></html>`;
     const win = window.open('', '_blank');
     win.document.write(html); win.document.close();
@@ -1875,6 +2015,29 @@
     it.addEventListener('click', () => { if(window.innerWidth<=768) closeSidebar(); }));
 </script>
 
+<!-- MODAL EDITAR CONSULTA (entrada simple) -->
+<div class="modal-overlay" id="modal-editar-historial">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>✏️ Editar consulta</h2>
+      <button class="modal-close" onclick="closeModal('modal-editar-historial')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="eh-id">
+      <div class="form-grid">
+        <div class="form-group full"><label>Tratamiento</label><input class="input" id="eh-tratamiento" type="text"></div>
+        <div class="form-group full"><label>Diagnóstico</label><input class="input" id="eh-diagnostico" type="text"></div>
+        <div class="form-group full"><label>Observaciones</label><textarea class="input" id="eh-observaciones" rows="5"></textarea></div>
+        <div class="form-group"><label>Próxima cita</label><input class="input" id="eh-proxima" type="date"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-outline" onclick="closeModal('modal-editar-historial')">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarEdicionHistorial()">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   .ec-sec { background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px; }
   .ec-sec-t { font-size:13px; font-weight:700; color:var(--accent); margin-bottom:12px; }
@@ -1884,6 +2047,7 @@
   .ec-checks input { width:auto; }
   .ec-foto { border:2px dashed var(--border); border-radius:10px; height:90px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text3); font-size:12px; background-size:cover; background-position:center; }
   .ec-foto.has-img span { display:none; }
+  .ec-firma { width:100%; max-width:360px; height:130px; background:#fff; border:1px solid var(--border); border-radius:8px; cursor:crosshair; touch-action:none; }
 </style>
 <!-- MODAL ENTRADA CLÍNICA ESPECIALIZADA (basado en Plantilla.html) -->
 <div class="modal-overlay" id="modal-especializado" style="z-index:3000;">
@@ -2057,6 +2221,23 @@
         <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer;font-size:13px;">
           <input type="checkbox" id="ec-consent" style="width:auto;"> El paciente acepta el consentimiento informado
         </label>
+      </div>
+
+      <!-- 9. FIRMAS DE CONFORMIDAD -->
+      <div class="ec-sec">
+        <div class="ec-sec-t">✍️ Firmas de Conformidad</div>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+          <div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Firma del paciente o responsable</div>
+            <canvas class="ec-firma" id="ec-firma-paciente" width="360" height="130"></canvas>
+            <button type="button" class="btn btn-outline" style="font-size:11px;padding:4px 10px;margin-top:6px;" onclick="limpiarFirma('ec-firma-paciente')">Limpiar</button>
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Firma del profesional tratante</div>
+            <canvas class="ec-firma" id="ec-firma-profesional" width="360" height="130"></canvas>
+            <button type="button" class="btn btn-outline" style="font-size:11px;padding:4px 10px;margin-top:6px;" onclick="limpiarFirma('ec-firma-profesional')">Limpiar</button>
+          </div>
+        </div>
       </div>
 
       <div class="form-actions" style="position:sticky;bottom:0;background:var(--card);padding-top:14px;border-top:1px solid var(--border);">
